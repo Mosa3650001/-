@@ -1,0 +1,6 @@
+{
+  "name": "SocialHub AI - Multi-Brand Social Media Manager",
+  "description": "منصة احترافية متكاملة لإدارة ونشر وجدولة المحتوى على فيسبوك، إنستغرام، تيك توك، واتساب، ويوتيوب لمتاجر متعددة مع أتمتة الذكاء الاصطناعي وصندوق الردود الذكي وإدارة المساعدين.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
