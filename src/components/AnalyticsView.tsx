@@ -17,12 +17,14 @@ import {
   CheckCircle2,
   Calendar,
 } from "lucide-react";
+import { AIContentAnalysisCard } from "./AIContentAnalysisCard";
 
 export const AnalyticsView: React.FC = () => {
   const {
     brands,
     currentBrandId,
     setCurrentBrandId,
+    selectedBrand,
     posts,
     connectedAccounts,
   } = useApp();
@@ -190,6 +192,13 @@ export const AnalyticsView: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* AI Content Analysis & Best Posting Times Engine */}
+      <AIContentAnalysisCard
+        currentBrand={selectedBrand}
+        timeRange={timeRange}
+        postsCount={publishedPosts.length}
+      />
 
       {/* Main KPI Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
