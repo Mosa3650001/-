@@ -445,15 +445,16 @@ app.post("/api/ai/suggest-times", async (req: Request, res: Response) => {
   }
 });
 
-// 5. AI Viral Content Ideas & Video Scripts Generator
+// 5. AI Viral Content Ideas & Video Scripts Generator (Supports Raw Story / Spontaneous Sketch)
 app.post("/api/ai/generate-ideas", async (req: Request, res: Response) => {
   try {
     const {
       brandName,
       brandTone,
       contentType, // 'reel' | 'carousel' | 'single_image' | 'story' | 'whatsapp_broadcast'
-      themeOrGoal, // e.g. "زيادة المبيعات", "تخفيضات أسبوعية", "تنسيقات دوام", "مسابقة وتفاعل"
-      keywordOrProduct, // e.g. "قميص كتان", "طقم سبور", "ملابس أطفال"
+      themeOrGoal, // e.g. "زيادة المبيعات", "تخفيضات أسبوعية", "اسكتش فكاهي داخل المحل"
+      keywordOrProduct, // e.g. "فستان سهرة", "طقم كاجوال"
+      rawUserStory, // spontaneous conversational prompt: e.g. "موسى ماسك فستان ويقنع جمال يلبسه عشان الزبائن وجمال يعصب..."
       count = 3,
     } = req.body;
 
@@ -463,59 +464,55 @@ app.post("/api/ai/generate-ideas", async (req: Request, res: Response) => {
       // High-quality local creative generation fallback
       const sampleIdeas = [
         {
-          title: `فكرة ريلز تريند: مقارنة 3 تنسيقات مختلفة لـ (${keywordOrProduct || "القطعة الأحدث"})`,
-          contentType: contentType || "reel",
-          targetPlatforms: ["tiktok", "instagram"],
-          hook: `الناس ينقسمون لـ 3 أنواع لما يلبسون هذه القطعة.. أنت أي نوع فيهم؟ 🤔👀`,
-          script: `المشهد 1 (0-3 ثوان): ظهور سريع ومفاجئ أمام الكاميرا مع هوك جذاب يسأل المتابعين عن نوعهم.\nالمشهد 2 (3-15 ثانية): الإطلالة الأولى كلاسيك هادئة، الإطلالة الثانية كاجوال عصرية، الإطلالة الثالثة جريئة وشبابية.\nالمشهد 3 (15-25 ثانية): تسليط الضوء على تفاصيل القماش الفاخرة والسعر المنافس في ${brandName || "متجرنا"}.\nالمشهد 4 (25-30 ثانية): دعوة سريعة لكتابة الرقم المفضل في التعليقات مع رابط الطلب.`,
-          scenes: [
-            { id: "s1", timestamp: "0:00 - 0:03", title: "الهوك الخاطف", voiceoverOrText: "أنت أي نوع من هالثلاثة لما تكشخ؟", visualDirection: "حركة سريعة وانتقال بصري Snap باليد أمام العدسة" },
-            { id: "s2", timestamp: "0:03 - 0:15", title: "استعراض الإطلالات", voiceoverOrText: "النوع الأول رسمي.. الثاني كاجوال مريح.. والثالث كشخة سهرات!", visualDirection: "لقطات كاملة سريعة مع تغيير الأحذية والإكسسوارات" },
-            { id: "s3", timestamp: "0:15 - 0:25", title: "إبراز التفاصيل والأسعار", voiceoverOrText: "والأهم أن الخامة قطن 100% والسعر حصري!", visualDirection: "زووم ماكرو على النسيج والياقة وكارت السعر" },
-            { id: "s4", timestamp: "0:25 - 0:30", title: "الدعوة للطلب (CTA)", voiceoverOrText: "اكتب مقاسك في التعليقات أو اطلب عبر الواتساب فوراً", visualDirection: "ظهور كود الخصم ورقم الواتساب على الشاشة" }
-          ],
-          filmingTips: "استخدم إضاءة قوية طبيعية، واعتمد الانتقالات البصرية الحركية (Jump Cuts أو Snaps) لرفع نسبة إكمال الفيديو (Retention Rate).",
-          recommendedAudioOrVibe: "إيقاع صيفي حماسي أو صوت تريند سريع (Trending Fashion Beat)",
-          captionDraft: `إطلالة واحدة ما تكفي! ✨ وفرنا لكم أجمل تشكيلة من ${keywordOrProduct || "الملابس العصرية"} في ${brandName || "متجرنا"}. شاركونا رأيكم: أي ستايل يناسبك أكثر؟ 👇 الكمية محدودة جداً بجميع فروعنا.`,
-          hashtags: [`#${(brandName || "متجرنا").replace(/\s+/g, "_")}`, "#تنسيقات_ملابس", "#ريلز_فاشن", "#ستايل_اليوم", "#تريند"],
-          callToAction: "علّق بـ (تم) أو راسلنا على الخاص لمعرفة المقاسات المتوفرة والطلب الفوري 📩",
-          estimatedDurationSeconds: 30,
-          priority: "high",
-        },
-        {
-          title: `فيديو تحدي السرعة: كيف تختار طقمك الكامل في 60 ثانية من ${brandName || "المعرض"}`,
+          title: rawUserStory
+            ? `اسكتش فكاهي داخل المعرض: ${rawUserStory.slice(0, 45)}...`
+            : `فكرة ريلز تريند: مقارنة 3 تنسيقات مختلفة لـ (${keywordOrProduct || "القطعة الأحدث"})`,
           contentType: contentType || "reel",
           targetPlatforms: ["tiktok", "instagram", "facebook"],
-          hook: `تحداني صاحب المحل أختار أفخم طقم بـ 90 ثانية وبأقل من 200 ريال! ⏱️🔥`,
-          script: `المصور يبدأ بعد تنازلي سريع على الشاشة، يتنقل بين الستاندات، ينسق القميص مع البنطال والحذاء، ثم يتوجه للمرآة لاستعراض النتيجة النهائية ومجموع السعر.`,
+          hook: rawUserStory
+            ? `يا جمال تعال ألبسك هذا الفستان عشان الزبائن يشوفوا كيف الموديل! 😂👗`
+            : `الناس ينقسمون لـ 3 أنواع لما يلبسون هذه القطعة.. أنت أي نوع فيهم؟ 🤔👀`,
+          script: rawUserStory
+            ? `المشهد 1 (0-4 ثوان): موسى يرفع الفستان ويلاحق جمال بالمعرض: "تعال يا جمال لا تستحي!" - نص على الشاشة: [لما تحاول تقنع صاحبك يجرب الموديل الجديد 😂]\nالمشهد 2 (4-12 ثانية): جمال يعصب: "مجنون أنت تلبسني فستان؟! وريه للزبائن ع المانيكان!" وموسى يكمل بإصرار كوميدي.\nالمشهد 3 (12-22 ثانية): جمال ياخذ الفستان ويشرح خامته وتفاصيله الفخمة للزبائن: "شوفوا القماش والتطريز والسعر الخطير في ${brandName || "متجرنا"}!"\nالمشهد 4 (22-30 ثانية): موسى: "يعني ما تبي تلبسه؟" جمال: "لا، بس لا يفوتكم العرض والكمية محدودة!"`
+            : `المشهد 1 (0-3 ثوان): ظهور سريع ومفاجئ أمام الكاميرا مع هوك جذاب يسأل المتابعين عن نوعهم.\nالمشهد 2 (3-15 ثانية): الإطلالة الأولى كلاسيك هادئة، الإطلالة الثانية كاجوال عصرية، الإطلالة الثالثة جريئة وشبابية.\nالمشهد 3 (15-25 ثانية): تسليط الضوء على تفاصيل القماش الفاخرة والسعر المنافس في ${brandName || "متجرنا"}.\nالمشهد 4 (25-30 ثانية): دعوة سريعة لكتابة الرقم المفضل في التعليقات مع رابط الطلب.`,
           scenes: [
-            { id: "s1", timestamp: "0:00 - 0:03", title: "بداية التحدي", voiceoverOrText: "الوقت بدأ.. هل أقدر أركب طقم كامل بهالسعر؟", visualDirection: "لقطة لعداد ثوانٍ متحرك على الشاشة وحركة كاميرا سريعة" },
-            { id: "s2", timestamp: "0:03 - 0:18", title: "اختيار القطع", voiceoverOrText: "أخذنا هالقطعة الفخمة مع هذا البنطال.. شوفوا تناسق الألوان!", visualDirection: "سحب القطع من الستاند وتنسيقها بجانب بعض بسرعة" },
-            { id: "s3", timestamp: "0:18 - 0:26", title: "البروفة النهائية", voiceoverOrText: "شوفوا النتيجة بعد اللبس.. طالع الطقم خيال!", visualDirection: "دوران 360 درجة أمام المرآة الكبرى بالمتجر" },
-            { id: "s4", timestamp: "0:26 - 0:30", title: "الخاتمة", voiceoverOrText: "زورونا اليوم في الفرع واستفيدوا من عروض التوفير", visualDirection: "عنوان المحل ورابط الخريطة" }
+            {
+              id: "s1",
+              timestamp: "0:00 - 0:04",
+              title: "الخطاف الكوميدي الصادم",
+              voiceoverOrText: "يا جمال تعال ألبسك هذا عشان الزبائن يشوفوا! | نص الشاشة: [لما زميلك بالدوام يتحمس بزيادة]",
+              visualDirection: "لقطة متوسطة متحركة، موسى يتقدم بسرعة ممسكاً بالفستان أمام الكاميرا باتجاه جمال"
+            },
+            {
+              id: "s2",
+              timestamp: "0:04 - 0:14",
+              title: "رد الفعل والمشهد الحواري",
+              voiceoverOrText: "جمال: 'أنت صاحي؟! اعرضه ع المانيكان!' | نص الشاشة: [ردة فعل غير متوقعة 💀]",
+              visualDirection: "لقطة قريبة (Reaction Shot) على وجه جمال العصبي ثم ضحك عفوي"
+            },
+            {
+              id: "s3",
+              timestamp: "0:14 - 0:24",
+              title: "استعراض القطعة والسعر الحصري",
+              voiceoverOrText: `شوفوا جمال الخياطة والتطريز الملكي والسعر اللي ما يتفوت بـ ${brandName || "المتجر"}`,
+              visualDirection: "زووم سريع على تفاصيل القماش مع إضاءة ستوديو متجر واضحة"
+            },
+            {
+              id: "s4",
+              timestamp: "0:24 - 0:30",
+              title: "الخاتمة والدعوة للإجراء (CTA)",
+              voiceoverOrText: "منشن خويك اللي لو تقله كذا يزعل! واطلبوا القطعة عبر الرابط في البايو أو تفضلوا بالفرع",
+              visualDirection: "ظهور عنوان المتجر وحسابات التواصل ورقم الواتساب على الشاشة"
+            }
           ],
-          filmingTips: "كاميرا محمولة باليد (Handheld POV) لإعطاء إحساس الواقعية والمغامرة والتسوق المباشر.",
-          recommendedAudioOrVibe: "موسيقى تشويق حماسية وسريعة",
-          captionDraft: `التحدي كان صعب بس طلعنا بأقوى إطلالة! 🔥 كولكشن جديد متوفر الآن في ${brandName || "متجرنا"}. تعال وجرب بنفسك في المعرض أو اطلب عبر الواتساب.`,
-          hashtags: [`#${(brandName || "متجرنا").replace(/\s+/g, "_")}`, "#تحدي", "#أزياء_رجالية", "#عروض_اليوم", "#fyp"],
-          callToAction: "منشن صاحبك اللي دايماً يتأخر باختيار ملابسه! 😂👇",
+          filmingTips: "التصوير بكاميرا عمودية 9:16، الحوار عفوي وسريع بدون تصنع، واستخدام مؤثر صوتي مضحك (Meme Sound Effect) عند ردة الفعل.",
+          recommendedAudioOrVibe: "مؤثرات كوميدية سريعة وموسيقى تريند مبهجة",
+          captionDraft: `لما الحماس يوصل مليون في المعرض! 😂👗 وفرنا لكم تشكيلة الفساتين والأزياء الجديدة في ${brandName || "متجرنا"}.\nمنشن صاحبك وعطنا رأيك بالكولكشن 👇 متوفر للتوصيل الفوري أو زيارة الفرع.`,
+          hashtags: [`#${(brandName || "متجرنا").replace(/\s+/g, "_")}`, "#اسكتش_كوميدي", "#ضحك", "#أزياء", "#تريند_تيك_توك", "#fyp"],
+          callToAction: "منشن خويك بالتعليقات وراسلنا على الخاص للطلب الفوري 💬",
           estimatedDurationSeconds: 30,
           priority: "urgent",
         },
-        {
-          title: `كاروسيل/بوست تعليمي: أسرار تنسيق ألوان الملابس للظهور بمظهر أغلى وأكثر فخامة`,
-          contentType: contentType === "reel" ? "reel" : "carousel",
-          targetPlatforms: ["instagram", "facebook"],
-          hook: `3 قواعد في تنسيق الألوان تخلي لبسك يبان كأنه من أشهر الماركات العالمية ✨👔`,
-          script: `شريحة 1: الغلاف الجذاب باللون الملكي.\nشريحة 2: قاعدة الـ 60-30-10 في توزيع ألوان الإطلالة.\nشريحة 3: درجات الألوان المحايدة الأكثر فخامة (البيج، الزيتي، الكحلي العميق).\nشريحة 4: استعراض تطبيق القواعد عملياً على قطع ${brandName || "المتجر"}.\nشريحة 5: كود خصم خاص للمتابعين مع دعوة للحفظ.`,
-          filmingTips: "تصوير مسطح مسرحي (Editorial Flat Lay) على خلفيات خشبية أو رخامية مع إضاءة ستوديو ناعمة.",
-          recommendedAudioOrVibe: "طابع هادئ، فاخر، وأنيق",
-          captionDraft: `الأناقة علم وذوق! 💫 إليك الدليل السريع لتنسيق ألوان ملابسك لتظهر دائماً بإطلالة مميزة ومتقنة. احفظ المنشور لتستفيد منه في طلعاتك القادمة 📌 متوفر الآن في ${brandName || "متجرنا"}.`,
-          hashtags: [`#${(brandName || "متجرنا").replace(/\s+/g, "_")}`, "#نصائح_فاشن", "#تنسيق_ألوان", "#أناقة", "#كشخة"],
-          callToAction: "احفظ المنشور وشاركه مع شخص يهتم بالأناقة! 🖤",
-          estimatedDurationSeconds: 20,
-          priority: "medium",
-        }
       ];
 
       return res.json({
@@ -526,38 +523,28 @@ app.post("/api/ai/generate-ideas", async (req: Request, res: Response) => {
     }
 
     const systemPrompt = `
-You are an award-winning creative social media director and viral content strategist for fashion and retail stores in the Arab world (Saudi Arabia, UAE, Kuwait, etc.).
-Your job is to generate highly engaging, actionable content ideas, full scene-by-scene video scripts for TikTok/Instagram Reels, and visual directions for "${brandName || "متجر أزياء"}".
+You are the world's best creative director, viral comedy sketch writer, and social media strategist for fashion stores and retail in the Arab world.
+Your job is to transform any spontaneous idea, user story, clothing product, or raw thought into a viral, high-converting video script for TikTok and Instagram Reels.
 
-Brand & Request details:
+Guidelines:
+1. If the user provides a spontaneous story ("rawUserStory"), build a hilarious, natural, highly engaging in-store sketch around those exact characters (e.g. Musa, Jamal, customer, shopkeeper) and seamlessly tie it into showcasing the clothes and driving store visits/orders.
+2. Provide an irresistible hook (first 3 seconds).
+3. Include on-screen text instructions (نص يكتب على الشاشة) in each scene.
+4. Include natural dialogue with local dialect humor (Saudi/Gulf/Arabic retail vibe).
+5. Provide exact camera framing, transitions, and audio cues.
+6. Provide ready-to-post captions with emojis and smart hashtags.
+
+Store Details:
 - Store Name: ${brandName || "متجرنا"}
-- Brand Tone: ${brandTone || "عصري، حماسي، ودود، يركز على القيمة والجودة"}
-- Content Type: ${contentType || "reel"} (e.g. reel, carousel, single_image, story, whatsapp_broadcast)
-- Strategic Theme / Goal: ${themeOrGoal || "زيادة المبيعات والتفاعل وتصريف الكولكشن"}
-- Focus Keyword / Product: ${keywordOrProduct || "أحدث صيحات الملابس والتنسيقات"}
-- Number of ideas to generate: ${count || 3}
-
-For each idea, output:
-1. title: Engaging title for internal team management.
-2. contentType: The content format.
-3. targetPlatforms: Array of platform names ('tiktok', 'instagram', 'facebook', 'whatsapp').
-4. hook: High-converting opening line (first 3 seconds attention grabber).
-5. script: Complete script text.
-6. scenes: Array of 3 to 4 sequential scenes with timestamp (e.g. '0:00 - 0:03'), title, voiceoverOrText, and visualDirection (camera motion/angles).
-7. filmingTips: Practical advice for the mobile videographer in the store.
-8. recommendedAudioOrVibe: Music/audio vibe recommendation.
-9. captionDraft: Full ready-to-post Arabic caption with emojis.
-10. hashtags: Array of 4-6 smart hashtags.
-11. callToAction: Clear CTA to buy, comment, or message on WhatsApp.
-12. estimatedDurationSeconds: Estimated video duration (15 to 45 seconds).
-13. priority: 'low' | 'medium' | 'high' | 'urgent'.
-
-Return strictly valid JSON conforming to the schema.
+- Brand Tone: ${brandTone || "عصري، فكاهي، حماسي، جذاب"}
+- User Raw Idea / Story: ${rawUserStory || keywordOrProduct || "اسكتش بيع ملابس وعروض مميزة"}
+- Content Type: ${contentType || "reel"}
+- Goal: ${themeOrGoal || "انتشار فيروسي (Viral Reach) وزيادة المبيعات"}
 `;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.7-flash",
-      contents: `Generate ${count || 3} viral Arabic content ideas and scripts for ${brandName} focusing on "${keywordOrProduct || "ملابس وتنسيقات"}" with goal "${themeOrGoal || "زيادة المبيعات والانتشار"}".`,
+      contents: `Generate ${count || 3} comprehensive, viral video scripts based on this request: "${rawUserStory || keywordOrProduct || themeOrGoal}" for store "${brandName}".`,
       config: {
         systemInstruction: systemPrompt,
         responseMimeType: "application/json",

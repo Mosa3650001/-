@@ -60,10 +60,11 @@ export const IdeaLabView: React.FC = () => {
   // Generator form state
   const [genBrandId, setGenBrandId] = useState<string>(selectedBrand ? selectedBrand.id : brands[0]?.id || "brand-bilal-koo");
   const [genContentType, setGenContentType] = useState<ContentType>("reel");
-  const [genTheme, setGenTheme] = useState<string>("زيادة المبيعات وعروض التوفير");
-  const [genKeyword, setGenKeyword] = useState<string>("قميص كتان صيفي وتنسيقات كاجوال");
+  const [genTheme, setGenTheme] = useState<string>("اسكتش فكاهي داخل المتجر وتريند فيروسي");
+  const [genKeyword, setGenKeyword] = useState<string>("فستان سهرة أو طقم كاجوال");
   const [genDuration, setGenDuration] = useState<number>(30);
   const [genPlatforms, setGenPlatforms] = useState<SocialPlatform[]>(["tiktok", "instagram"]);
+  const [genRawStory, setGenRawStory] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedIdeas, setGeneratedIdeas] = useState<Omit<ContentIdea, "id" | "createdAt" | "updatedAt">[]>([]);
 
@@ -129,6 +130,7 @@ export const IdeaLabView: React.FC = () => {
           contentType: genContentType,
           themeOrGoal: genTheme,
           keywordOrProduct: genKeyword,
+          rawUserStory: genRawStory,
           count: 3,
         }),
       });
@@ -370,6 +372,38 @@ export const IdeaLabView: React.FC = () => {
 
               <div className="text-xs px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-mono border border-indigo-200 dark:border-indigo-500/20 self-start sm:self-auto">
                 Gemini 3.7 Flash Creative Director
+              </div>
+            </div>
+
+            {/* Spontaneous Conversational Story Box (NEW: Super-Smart Sketch Engine) */}
+            <div className="p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-indigo-500/5 to-purple-500/10 border-2 border-amber-400/40 dark:border-amber-500/30 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-500 fill-amber-500" />
+                  <span>اشرح فكرتك أو الاسكتش العفوي للذكاء الاصطناعي (مثل: قصة موسى وجمال):</span>
+                </label>
+                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-200 dark:bg-amber-500/30 text-amber-900 dark:text-amber-200 font-bold font-mono">
+                  Gemini Creative Director AI
+                </span>
+              </div>
+              <textarea
+                value={genRawStory}
+                onChange={(e) => setGenRawStory(e.target.value)}
+                placeholder="اكتب براحتك وعفوية بدون ترتيب، مثال: (بدي أسوي فيديو يظهر فيه موسى وماسك فستان ويقول يا جمال تعال ألبسك عشان الزبائن يشوفوا كيف يظهر وجمال يعصب ويكملوا مشهد كوميدي بالمحل مع توضيح جودة القماش والسعر)..."
+                rows={3}
+                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl p-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500 leading-relaxed shadow-xs"
+              />
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <span>💡 سيقوم الذكاء الاصطناعي بصياغة: الهوك، حوارات الشخصيات، نصوص الشاشة، زوايا الكاميرا، والكابشن والهاشتاقات المناسبة.</span>
+                {genRawStory && (
+                  <button
+                    type="button"
+                    onClick={() => setGenRawStory("")}
+                    className="text-rose-500 hover:underline font-bold text-xs"
+                  >
+                    مسح النص
+                  </button>
+                )}
               </div>
             </div>
 

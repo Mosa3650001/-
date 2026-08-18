@@ -1,0 +1,109 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "App user profile, roles, credentials and brand permissions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["owner", "admin", "content_creator", "support", "viewer"] },
+        "assignedBrandIds": { "type": "array", "description": "List of brand IDs the user has access to" },
+        "avatar": { "type": "string" },
+        "phone": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "Brand": {
+      "title": "Brand",
+      "description": "Store or brand definition with AI rules, colors, and tone",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "tagline": { "type": "string" },
+        "description": { "type": "string" },
+        "logo": { "type": "string" },
+        "primaryColor": { "type": "string" },
+        "toneLabel": { "type": "string" },
+        "aiReplyInstructions": { "type": "string" },
+        "defaultHashtags": { "type": "array" },
+        "connectedPlatforms": { "type": "array" }
+      },
+      "required": ["id", "name", "slug"]
+    },
+    "ContentIdea": {
+      "title": "ContentIdea",
+      "description": "Video sketch, viral idea, script breakdown and stage",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "brandId": { "type": "string" },
+        "contentType": { "type": "string" },
+        "stage": { "type": "string" },
+        "hook": { "type": "string" },
+        "script": { "type": "string" },
+        "filmingTips": { "type": "string" },
+        "hashtags": { "type": "array" },
+        "priority": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "brandId", "stage"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "Scheduled or published social media post",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "brandId": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "status": { "type": "string" },
+        "scheduledDate": { "type": "string" },
+        "scheduledTime": { "type": "string" }
+      },
+      "required": ["id", "title", "status"]
+    },
+    "InboxItem": {
+      "title": "InboxItem",
+      "description": "Comments and direct messages synced from platforms",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "brandId": { "type": "string" },
+        "platform": { "type": "string" },
+        "authorName": { "type": "string" },
+        "content": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "content", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and permissions"
+    },
+    "/brands/{brandId}": {
+      "schema": "Brand",
+      "description": "Stores and brand configuration"
+    },
+    "/ideas/{ideaId}": {
+      "schema": "ContentIdea",
+      "description": "Video production ideas and sketches"
+    },
+    "/posts/{postId}": {
+      "schema": "Post",
+      "description": "Scheduled and published posts"
+    },
+    "/inbox/{inboxId}": {
+      "schema": "InboxItem",
+      "description": "Customer comments and messages"
+    }
+  }
+}

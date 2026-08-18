@@ -14,7 +14,11 @@ import {
   Moon,
   Check,
   X,
+  Cloud,
+  LogIn,
+  Users,
 } from "lucide-react";
+import { AuthModal } from "./AuthModal";
 
 export const Navbar: React.FC = () => {
   const {
@@ -32,10 +36,12 @@ export const Navbar: React.FC = () => {
     toggleSidebar,
     sidebarOpen,
     activeTab,
+    isCloudSynced,
   } = useApp();
 
   const [brandDropdownOpen, setBrandDropdownOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   const pendingCommentsCount = inboxItems.filter((i) => i.status === "pending").length;
 
@@ -208,6 +214,19 @@ export const Navbar: React.FC = () => {
 
         {/* Left Section: Controls & Actions */}
         <div className="flex items-center gap-2">
+          {/* Cloud Sync Status Badge */}
+          <div
+            className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold border transition ${
+              isCloudSynced
+                ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+            }`}
+            title="مزامنة فورية حية مع السحابة (Firebase Firestore) لجميع الأجهزة"
+          >
+            <Cloud className={`w-3.5 h-3.5 ${isCloudSynced ? "text-emerald-500 fill-emerald-500/30 animate-pulse" : "text-slate-400"}`} />
+            <span className="text-[11px]">{isCloudSynced ? "مزامنة سحابية حية" : "جاري الاتصال بالسحابة..."}</span>
+          </div>
+
           {/* Theme Toggle Button */}
           <button
             type="button"
@@ -299,6 +318,34 @@ export const Navbar: React.FC = () => {
                     </button>
                   ))}
                 </div>
+
+                <div className="my-1 border-t border-slate-100 dark:border-slate-800"></div>
+
+                <div className="p-1 space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserDropdownOpen(false);
+                      setAuthModalOpen(true);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition"
+                  >
+                    <LogIn className="w-3.5 h-3.5" />
+                    <span>تسجيل دخول / إنشاء حساب مساعد</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab("team");
+                      setUserDropdownOpen(false);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>إدارة الصلاحيات والفريق...</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -315,6 +362,9 @@ export const Navbar: React.FC = () => {
           </button>
         </div>
       </header>
+
+      {/* Authentication Modal */}
+      <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
     </>
   );
 };

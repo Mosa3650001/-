@@ -24,6 +24,13 @@ import {
   INITIAL_IDEAS,
   INITIAL_PUBLISH_GOALS,
 } from "../data/initialData";
+import {
+  subscribeToCollection,
+  saveDocument,
+  deleteDocument,
+  seedInitialFirestoreData,
+  COLLECTIONS,
+} from "../services/firebaseDb";
 
 export type AppTheme = "dark" | "light";
 
@@ -46,6 +53,9 @@ interface AppContextType {
   currentUser: TeamMember;
   setCurrentUser: (user: TeamMember) => void;
   
+  // Realtime Cloud Sync Status
+  isCloudSynced: boolean;
+
   // Ideas & Content Pipeline
   ideas: ContentIdea[];
   createIdea: (idea: Omit<ContentIdea, "id" | "createdAt" | "updatedAt">) => ContentIdea;
@@ -185,10 +195,85 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [importedIdeaForStudio, setImportedIdeaForStudio] = useState<ContentIdea | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isCloudSynced, setIsCloudSynced] = useState(false);
 
   const toggleSidebar = () => {
     setSidebarOpen((prev) => !prev);
   };
+
+  // Real-time Cloud Firestore Subscriptions & Initial Seeding
+  useEffect(() => {
+    // Seed initial data to cloud if collections are empty
+    seedInitialFirestoreData(
+      brands,
+      connectedAccounts,
+      ideas,
+      posts,
+      inboxItems,
+      teamMembers,
+      dailyGoals
+    );
+
+    // Listen to real-time updates from cloud Firestore
+    const unsubBrands = subscribeToCollection<Brand>(COLLECTIONS.BRANDS, (data) => {
+      if (data && data.length > 0) {
+        setBrands(data);
+        setIsCloudSynced(true);
+      }
+    });
+
+    const unsubAccounts = subscribeToCollection<ConnectedAccount>(COLLECTIONS.ACCOUNTS, (data) => {
+      if (data && data.length > 0) {
+        setConnectedAccounts(data);
+        setIsCloudSynced(true);
+      }
+    });
+
+    const unsubIdeas = subscribeToCollection<ContentIdea>(COLLECTIONS.IDEAS, (data) => {
+      if (data && data.length > 0) {
+        setIdeas(data);
+        setIsCloudSynced(true);
+      }
+    });
+
+    const unsubPosts = subscribeToCollection<Post>(COLLECTIONS.POSTS, (data) => {
+      if (data && data.length > 0) {
+        setPosts(data);
+        setIsCloudSynced(true);
+      }
+    });
+
+    const unsubInbox = subscribeToCollection<InboxItem>(COLLECTIONS.INBOX, (data) => {
+      if (data && data.length > 0) {
+        setInboxItems(data);
+        setIsCloudSynced(true);
+      }
+    });
+
+    const unsubTeam = subscribeToCollection<TeamMember>(COLLECTIONS.USERS, (data) => {
+      if (data && data.length > 0) {
+        setTeamMembers(data);
+        setIsCloudSynced(true);
+      }
+    });
+
+    const unsubGoals = subscribeToCollection<DailyPublishGoal>(COLLECTIONS.GOALS, (data) => {
+      if (data && data.length > 0) {
+        setDailyGoals(data);
+        setIsCloudSynced(true);
+      }
+    });
+
+    return () => {
+      unsubBrands();
+      unsubAccounts();
+      unsubIdeas();
+      unsubPosts();
+      unsubInbox();
+      unsubTeam();
+      unsubGoals();
+    };
+  }, []);
 
   // Apply Theme to document HTML
   useEffect(() => {
@@ -284,33 +369,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: now,
     };
     setIdeas((prev) => [newIdea, ...prev]);
+    saveDocument(COLLECTIONS.IDEAS, newIdea.id, newIdea);
     addToast({
       type: "success",
-      title: "تمت إضافة الفكرة إلى مسار الإنتاج! 💡",
+      title: "تمت إضافة الفكرة ومزامنتها سحابياً! 💡",
       description: newIdea.title,
     });
     return newIdea;
   };
 
   const updateIdea = (id: string, updates: Partial<ContentIdea>) => {
+    const updatedData = { ...updates, updatedAt: new Date().toISOString() };
     setIdeas((prev) =>
       prev.map((item) =>
         item.id === id
-          ? { ...item, ...updates, updatedAt: new Date().toISOString() }
+          ? { ...item, ...updatedData }
           : item
       )
     );
+    saveDocument(COLLECTIONS.IDEAS, id, updatedData);
     addToast({
       type: "success",
-      title: "تم تحديث بيانات الفكرة ومرحلة الإنتاج",
+      title: "تم تحديث بيانات الفكرة ومرحلة الإنتاج ومزامنتها مع كافة الأجهزة",
     });
   };
 
   const deleteIdea = (id: string) => {
     setIdeas((prev) => prev.filter((item) => item.id !== id));
+    deleteDocument(COLLECTIONS.IDEAS, id);
     addToast({
       type: "info",
-      title: "تم حذف الفكرة من المسار",
+      title: "تم حذف الفكرة ومزامنة التغيير",
     });
   };
 
@@ -352,9 +441,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setDailyGoals((prev) =>
       prev.map((g) => (g.id === id ? { ...g, ...updates } : g))
     );
+    saveDocument(COLLECTIONS.GOALS, id, updates);
     addToast({
       type: "success",
-      title: "تم تحديث الخطة المستهدفة لهذا اليوم",
+      title: "تم تحديث الخطة المستهدفة لهذا اليوم ومزامنتها",
     });
   };
 
@@ -376,9 +466,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setPosts((prev) => [newPost, ...prev]);
+    saveDocument(COLLECTIONS.POSTS, newPost.id, newPost);
     addToast({
       type: "success",
-      title: newPost.status === "published" ? "تم نشر المنشور بنجاح!" : "تمت جدولة المنشور بنجاح!",
+      title: newPost.status === "published" ? "تم نشر المنشور ومزامنته سحابياً!" : "تمت جدولة المنشور بنجاح!",
       description: `المشروع: ${newPost.targetBrandIds.map(id => brands.find(b => b.id === id)?.name || id).join("، ")}`,
     });
     return newPost;
@@ -388,71 +479,82 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPosts((prev) =>
       prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
     );
+    saveDocument(COLLECTIONS.POSTS, id, updates);
     addToast({
       type: "success",
-      title: "تم تعديل المنشور بنجاح",
+      title: "تم تعديل المنشور ومزامنة التغيير بنجاح",
     });
   };
 
   const deletePost = (id: string) => {
     setPosts((prev) => prev.filter((p) => p.id !== id));
+    deleteDocument(COLLECTIONS.POSTS, id);
     addToast({
       type: "info",
-      title: "تم حذف المنشور",
+      title: "تم حذف المنشور ومزامنته",
     });
   };
 
   const publishPostNow = (id: string) => {
+    const updatePayload = {
+      status: "published" as const,
+      publishedAt: new Date().toISOString(),
+      stats: {
+        views: Math.floor(Math.random() * 2000) + 500,
+        likes: Math.floor(Math.random() * 300) + 40,
+        comments: Math.floor(Math.random() * 50) + 5,
+        shares: Math.floor(Math.random() * 20) + 2,
+        clicks: Math.floor(Math.random() * 80) + 10,
+      },
+    };
     setPosts((prev) =>
       prev.map((p) =>
         p.id === id
           ? {
               ...p,
-              status: "published",
-              publishedAt: new Date().toISOString(),
-              stats: {
-                views: Math.floor(Math.random() * 2000) + 500,
-                likes: Math.floor(Math.random() * 300) + 40,
-                comments: Math.floor(Math.random() * 50) + 5,
-                shares: Math.floor(Math.random() * 20) + 2,
-                clicks: Math.floor(Math.random() * 80) + 10,
-              },
+              ...updatePayload,
             }
           : p
       )
     );
+    saveDocument(COLLECTIONS.POSTS, id, updatePayload);
     addToast({
       type: "success",
-      title: "🚀 تم النشر الفوري على جميع المنصات المحددة!",
+      title: "🚀 تم النشر الفوري على جميع المنصات المحددة ومزامنته سحابياً!",
     });
   };
 
   // --- INBOX METHODS ---
   const replyToInbox = (id: string, replyText: string, isAuto = false) => {
+    const updatePayload = {
+      status: isAuto ? "ai_replied" as const : "manual_replied" as const,
+      finalReplyText: replyText,
+      repliedAt: "الآن",
+      repliedBy: isAuto ? "الذكاء الاصطناعي (Auto-Pilot)" : currentUser.name,
+    };
     setInboxItems((prev) =>
       prev.map((item) =>
         item.id === id
           ? {
               ...item,
-              status: isAuto ? "ai_replied" : "manual_replied",
-              finalReplyText: replyText,
-              repliedAt: "الآن",
-              repliedBy: isAuto ? "الذكاء الاصطناعي (Auto-Pilot)" : currentUser.name,
+              ...updatePayload,
             }
           : item
       )
     );
+    saveDocument(COLLECTIONS.INBOX, id, updatePayload);
     addToast({
       type: "success",
-      title: isAuto ? "تم الرد تلقائياً بواسطة الذكاء الاصطناعي" : "تم إرسال الرد بنجاح",
+      title: isAuto ? "تم الرد تلقائياً بواسطة الذكاء الاصطناعي" : "تم إرسال الرد ومزامنته بنجاح",
     });
   };
 
   const deleteInboxItem = (id: string) => {
     setInboxItems((prev) => prev.filter((item) => item.id !== id));
+    deleteDocument(COLLECTIONS.INBOX, id);
     addToast({
       type: "info",
-      title: "تم حذف العنصر من صندوق الوارد",
+      title: "تم حذف العنصر من صندوق الوارد ومزامنته",
     });
   };
 
@@ -461,13 +563,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updated = inboxItems.map((item) => {
       if (item.status === "pending") {
         count++;
-        return {
+        const updateObj = {
           ...item,
           status: "ai_replied" as const,
           finalReplyText: item.aiSuggestedReply || "أهلاً بك! يسعدنا خدمتك والرد على استفسارك 🌸",
           repliedAt: "الآن",
           repliedBy: "الذكاء الاصطناعي (Auto-Pilot المجمع)",
         };
+        saveDocument(COLLECTIONS.INBOX, item.id, updateObj);
+        return updateObj;
       }
       return item;
     });
@@ -475,7 +579,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setInboxItems(updated);
     addToast({
       type: "success",
-      title: `⚡ تم الرد آلياً على ${count} استفسار بنجاح!`,
+      title: `⚡ تم الرد آلياً على ${count} استفسار ومزامنتها بنجاح!`,
       description: "تم تطبيق قواعد كل متجر ونبرته المناسبة.",
     });
     return count;
@@ -489,6 +593,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id,
     };
     setBrands((prev) => [...prev, newBrand]);
+    saveDocument(COLLECTIONS.BRANDS, id, newBrand);
 
     // Auto-create initial connected accounts placeholders
     const newAccounts: ConnectedAccount[] = brandData.connectedPlatforms.map((platform) => ({
@@ -507,9 +612,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
 
     setConnectedAccounts((prev) => [...prev, ...newAccounts]);
+    for (const acc of newAccounts) {
+      saveDocument(COLLECTIONS.ACCOUNTS, acc.id, acc);
+    }
     addToast({
       type: "success",
-      title: `تم إنشاء متجر: ${newBrand.name}`,
+      title: `تم إنشاء متجر ومزامنته سحابياً: ${newBrand.name}`,
     });
     return newBrand;
   };
@@ -518,9 +626,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBrands((prev) =>
       prev.map((b) => (b.id === id ? { ...b, ...updates } : b))
     );
+    saveDocument(COLLECTIONS.BRANDS, id, updates);
     addToast({
       type: "success",
-      title: "تم حفظ إعدادات المتجر بنجاح",
+      title: "تم حفظ إعدادات المتجر ومزامنتها بنجاح",
     });
   };
 
@@ -535,33 +644,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     setBrands((prev) => prev.filter((b) => b.id !== id));
     setConnectedAccounts((prev) => prev.filter((a) => a.brandId !== id));
+    deleteDocument(COLLECTIONS.BRANDS, id);
     if (currentBrandId === id) {
       setCurrentBrandId("all");
     }
     addToast({
       type: "info",
-      title: "تم حذف المتجر والحسابات المرتبطة به",
+      title: "تم حذف المتجر ومزامنة التغيير",
     });
   };
 
   // --- CONNECTED ACCOUNTS ---
   const toggleAccountStatus = (id: string) => {
+    const acc = connectedAccounts.find(a => a.id === id);
+    const nextStatus = acc?.status === "connected" ? "disconnected" : "connected";
     setConnectedAccounts((prev) =>
-      prev.map((acc) => {
-        if (acc.id === id) {
-          const nextStatus = acc.status === "connected" ? "disconnected" : "connected";
+      prev.map((a) => {
+        if (a.id === id) {
           return {
-            ...acc,
+            ...a,
             status: nextStatus,
             lastSyncedAt: "الآن",
           };
         }
-        return acc;
+        return a;
       })
     );
+    saveDocument(COLLECTIONS.ACCOUNTS, id, { status: nextStatus, lastSyncedAt: "الآن" });
     addToast({
       type: "info",
-      title: "تم تحديث حالة ربط الحساب",
+      title: "تم تحديث حالة ربط الحساب ومزامنتها",
     });
   };
 
@@ -569,9 +681,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setConnectedAccounts((prev) =>
       prev.map((acc) => (acc.id === id ? { ...acc, ...updates, lastSyncedAt: "الآن" } : acc))
     );
+    saveDocument(COLLECTIONS.ACCOUNTS, id, { ...updates, lastSyncedAt: "الآن" });
     addToast({
       type: "success",
-      title: "تم حفظ وتحديث إعدادات وتوكن الـ API بنجاح",
+      title: "تم حفظ وتحديث إعدادات وتوكن الـ API ومزامنتها سحابياً",
     });
   };
 
@@ -602,9 +715,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setConnectedAccounts((prev) => [...prev, newAcc]);
+    saveDocument(COLLECTIONS.ACCOUNTS, newAcc.id, newAcc);
     addToast({
       type: "success",
-      title: `تم ربط حساب ${platform} بنجاح!`,
+      title: `تم ربط حساب ${platform} ومزامنته بنجاح!`,
       description: `المتجر: ${brand?.name || brandId}`,
     });
   };
@@ -617,9 +731,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       joinedDate: new Date().toISOString().split("T")[0],
     };
     setTeamMembers((prev) => [...prev, newMember]);
+    saveDocument(COLLECTIONS.USERS, newMember.id, newMember);
     addToast({
       type: "success",
-      title: `تمت إضافة المساعد: ${newMember.name}`,
+      title: `تمت إضافة المساعد ومزامنته: ${newMember.name}`,
       description: `الدور: ${newMember.roleLabel}`,
     });
     return newMember;
@@ -629,9 +744,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTeamMembers((prev) =>
       prev.map((m) => (m.id === id ? { ...m, ...updates } : m))
     );
+    saveDocument(COLLECTIONS.USERS, id, updates);
     addToast({
       type: "success",
-      title: "تم تحديث بيانات المساعد وصلاحياته",
+      title: "تم تحديث بيانات المساعد وصلاحياته ومزامنتها سحابياً",
     });
   };
 
@@ -644,9 +760,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     setTeamMembers((prev) => prev.filter((m) => m.id !== id));
+    deleteDocument(COLLECTIONS.USERS, id);
     addToast({
       type: "info",
-      title: "تم حذف عضو الفريق",
+      title: "تم حذف عضو الفريق ومزامنة التغيير",
     });
   };
 
@@ -666,6 +783,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         posts,
         ideas,
         dailyGoals,
+        isCloudSynced,
         createIdea,
         updateIdea,
         deleteIdea,
@@ -718,4 +836,3 @@ export const useApp = () => {
   }
   return context;
 };
-

@@ -247,3 +247,32 @@ export interface DailyPublishGoal {
   notes?: string;
 }
 
+export type UserRole = "owner" | "admin" | "content_creator" | "support" | "viewer";
+
+export interface UserPermissions {
+  canManageStores: boolean;
+  canManageApiKeys: boolean;
+  canPublishImmediately: boolean;
+  canCreateIdeas: boolean;
+  canEditIdeas: boolean;
+  canDeleteIdeas: boolean;
+  canReplyInbox: boolean;
+  canManageTeam: boolean;
+  canViewAnalytics: boolean;
+}
+
+export interface AppUser {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  roleTitleAr: string;
+  avatar?: string;
+  assignedBrandIds: string[]; // ['all'] or specific brand ids
+  createdAt: string;
+  lastActive?: string;
+  status: "active" | "inactive";
+  permissions: UserPermissions;
+}
+
+
