@@ -63,6 +63,8 @@ interface AppContextType {
   deleteIdea: (id: string) => void;
   advanceIdeaStage: (id: string) => void;
   sendIdeaToPostStudio: (idea: ContentIdea) => void;
+  toggleArchiveIdea: (id: string) => void;
+  autoArchiveOldIdeas: (daysThreshold?: number) => number;
 
   // Daily Publishing Strategy & Goals
   dailyGoals: DailyPublishGoal[];
@@ -99,8 +101,8 @@ interface AppContextType {
   deleteTeamMember: (id: string) => void;
 
   // Navigation
-  activeTab: "dashboard" | "ideas" | "studio" | "calendar" | "inbox" | "analytics" | "team" | "stores";
-  setActiveTab: (tab: "dashboard" | "ideas" | "studio" | "calendar" | "inbox" | "analytics" | "team" | "stores") => void;
+  activeTab: "dashboard" | "ideas" | "studio" | "calendar" | "inbox" | "analytics" | "team" | "stores" | "about" | "privacy" | "data_deletion";
+  setActiveTab: (tab: "dashboard" | "ideas" | "studio" | "calendar" | "inbox" | "analytics" | "team" | "stores" | "about" | "privacy" | "data_deletion") => void;
 
   // Quick edit modal or trigger helper
   editingPost: Post | null;
@@ -435,6 +437,67 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       title: "تم نقل الفكرة إلى استوديو النشر 🎨",
       description: "تمت تعبئة النصوص والهاشتاقات والتفاصيل تلقائياً.",
     });
+  };
+
+  const toggleArchiveIdea = (id: string) => {
+    const targetIdea = ideas.find((i) => i.id === id);
+    if (!targetIdea) return;
+    const nextArchived = !targetIdea.isArchived;
+    const updatePayload = {
+      isArchived: nextArchived,
+      archivedAt: nextArchived ? new Date().toISOString() : undefined,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setIdeas((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, ...updatePayload } : i))
+    );
+    saveDocument(COLLECTIONS.IDEAS, id, updatePayload);
+    addToast({
+      type: nextArchived ? "info" : "success",
+      title: nextArchived ? "📦 تم نقل الفكرة إلى الأرشيف" : "✨ تم استرجاع الفكرة من الأرشيف إلى مسار العمل النشط",
+    });
+  };
+
+  const autoArchiveOldIdeas = (daysThreshold = 14): number => {
+    let archivedCount = 0;
+    const now = Date.now();
+    const thresholdMs = daysThreshold * 24 * 60 * 60 * 1000;
+
+    const updated = ideas.map((idea) => {
+      // Auto archive published ideas older than 7 days, or ideas created > daysThreshold
+      const createdTime = new Date(idea.createdAt).getTime();
+      const isOld = now - createdTime > thresholdMs;
+      const isPublishedOld = idea.stage === "published" && (now - createdTime > 3 * 24 * 60 * 60 * 1000);
+
+      if (!idea.isArchived && (isOld || isPublishedOld)) {
+        archivedCount++;
+        const updatePayload = {
+          isArchived: true,
+          archivedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        saveDocument(COLLECTIONS.IDEAS, idea.id, updatePayload);
+        return { ...idea, ...updatePayload };
+      }
+      return idea;
+    });
+
+    if (archivedCount > 0) {
+      setIdeas(updated);
+      addToast({
+        type: "success",
+        title: `🗂️ تمت أرشفة ${archivedCount} فكرة ومنشور قديم تلقائياً!`,
+        description: `تم تنظيف مساحة العمل ونقل الأفكار المنشورة والقديمة إلى الأرشيف.`,
+      });
+    } else {
+      addToast({
+        type: "info",
+        title: "مساحة العمل منظمة بالفعل!",
+        description: "لا توجد أفكار أو منشورات قديمة تحتاج للأرشفة حالياً.",
+      });
+    }
+    return archivedCount;
   };
 
   const updateDailyGoal = (id: string, updates: Partial<DailyPublishGoal>) => {
@@ -789,6 +852,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteIdea,
         advanceIdeaStage,
         sendIdeaToPostStudio,
+        toggleArchiveIdea,
+        autoArchiveOldIdeas,
         updateDailyGoal,
         inboxItems,
         teamMembers,

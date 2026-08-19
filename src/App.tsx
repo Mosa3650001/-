@@ -11,6 +11,10 @@ import { InboxView } from "./components/InboxView";
 import { AnalyticsView } from "./components/AnalyticsView";
 import { TeamManagementView } from "./components/TeamManagementView";
 import { StoreSettingsView } from "./components/StoreSettingsView";
+import { AboutUsView } from "./components/AboutUsView";
+import { PrivacyPolicyView } from "./components/PrivacyPolicyView";
+import { DataDeletionView } from "./components/DataDeletionView";
+import { Footer } from "./components/Footer";
 import {
   LayoutDashboard,
   Lightbulb,
@@ -33,8 +37,8 @@ const MainLayout: React.FC = () => {
       <Sidebar />
 
       {/* Main Full-Width Content Area */}
-      <div className="flex-1 flex overflow-hidden">
-        <main className="flex-1 overflow-y-auto p-3 sm:p-5 md:p-6 pb-20 md:pb-8 bg-slate-100 dark:bg-[#070b14] transition-colors">
+      <div className="flex-1 flex flex-col">
+        <main className="flex-1 p-3 sm:p-5 md:p-6 pb-20 md:pb-8 bg-slate-100 dark:bg-[#070b14] transition-colors">
           <div className="max-w-7xl mx-auto w-full">
             {activeTab === "dashboard" && <DashboardView />}
             {activeTab === "ideas" && <IdeaLabView />}
@@ -44,8 +48,14 @@ const MainLayout: React.FC = () => {
             {activeTab === "analytics" && <AnalyticsView />}
             {activeTab === "team" && <TeamManagementView />}
             {activeTab === "stores" && <StoreSettingsView />}
+            {activeTab === "about" && <AboutUsView onNavigateTab={setActiveTab} />}
+            {activeTab === "privacy" && <PrivacyPolicyView />}
+            {activeTab === "data_deletion" && <DataDeletionView />}
           </div>
         </main>
+
+        {/* Global Footer with official links */}
+        <Footer onNavigateTab={setActiveTab} activeTab={activeTab} />
       </div>
 
       {/* Mobile Bottom Quick Bar */}

@@ -1,6 +1,6 @@
 {
-  "name": "SocialHub AI - Multi-Brand Social Media Manager",
-  "description": "منصة احترافية متكاملة لإدارة ونشر وجدولة المحتوى على فيسبوك، إنستغرام، تيك توك، واتساب، ويوتيوب لمتاجر متعددة مع أتمتة الذكاء الاصطناعي وصندوق الردود الذكي وإدارة المساعدين.",
+  "name": "SmartPost365 - AI Social Media & Multi-Brand Manager",
+  "description": "المنصة الذكية المتكاملة لإدارة وجدولة ونشر المحتوى بالذكاء الاصطناعي وصندوق الردود المؤتمت لمتاجر وعلامات تجارية متعددة على مدار 365 يوماً.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

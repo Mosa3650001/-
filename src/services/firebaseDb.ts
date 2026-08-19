@@ -62,10 +62,10 @@ export function subscribeToCollection<T>(
 }
 
 // 2. Generic Save Document (Insert or Update)
-export async function saveDocument<T extends { id: string }>(
+export async function saveDocument<T extends Record<string, any> = Record<string, any>>(
   collectionName: string,
   docId: string,
-  data: Partial<T>
+  data: Partial<T> | Record<string, any>
 ): Promise<void> {
   try {
     const docRef = doc(db, collectionName, docId);

@@ -35,6 +35,10 @@ import {
   X,
   RefreshCw,
   Zap,
+  Archive,
+  ArchiveRestore,
+  Inbox,
+  FolderArchive,
 } from "lucide-react";
 
 export const IdeaLabView: React.FC = () => {
@@ -48,14 +52,16 @@ export const IdeaLabView: React.FC = () => {
     deleteIdea,
     advanceIdeaStage,
     sendIdeaToPostStudio,
+    toggleArchiveIdea,
+    autoArchiveOldIdeas,
     dailyGoals,
     updateDailyGoal,
     posts,
     addToast,
   } = useApp();
 
-  // Active Sub-Tab: 'pipeline' (المسار والمهام) | 'generator' (مولد الأفكار بالذكاء الاصطناعي) | 'planner' (الأهداف اليومية)
-  const [activeSubTab, setActiveSubTab] = useState<"pipeline" | "generator" | "planner">("pipeline");
+  // Active Sub-Tab: 'pipeline' (المسار والمهام) | 'generator' (مولد الأفكار بالذكاء الاصطناعي) | 'planner' (الأهداف اليومية) | 'archive' (الأرشيف)
+  const [activeSubTab, setActiveSubTab] = useState<"pipeline" | "generator" | "planner" | "archive">("pipeline");
 
   // Generator form state
   const [genBrandId, setGenBrandId] = useState<string>(selectedBrand ? selectedBrand.id : brands[0]?.id || "brand-bilal-koo");
@@ -73,11 +79,13 @@ export const IdeaLabView: React.FC = () => {
   const [filterType, setFilterType] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [viewMode, setViewMode] = useState<"board" | "table">("board");
+  const [archiveFilter, setArchiveFilter] = useState<"active" | "archived" | "all">("active");
 
   // Modal states
   const [selectedIdeaForDetail, setSelectedIdeaForDetail] = useState<ContentIdea | null>(null);
   const [editingIdeaModal, setEditingIdeaModal] = useState<ContentIdea | null>(null);
   const [isNewIdeaModalOpen, setIsNewIdeaModalOpen] = useState(false);
+
 
   // New manual idea draft
   const [manualTitle, setManualTitle] = useState("");
@@ -102,6 +110,16 @@ export const IdeaLabView: React.FC = () => {
   // Filtering ideas
   const displayedIdeas = ideas.filter((idea) => {
     if (currentBrandId !== "all" && idea.brandId !== currentBrandId) return false;
+    
+    // In pipeline view: show active (non-archived) by default, or respect archiveFilter if set
+    if (activeSubTab === "pipeline") {
+      if (archiveFilter === "active" && idea.isArchived) return false;
+      if (archiveFilter === "archived" && !idea.isArchived) return false;
+    } else if (activeSubTab === "archive") {
+      // In archive tab: show only archived ideas
+      if (!idea.isArchived) return false;
+    }
+
     if (filterStage !== "all" && idea.stage !== filterStage) return false;
     if (filterType !== "all" && idea.contentType !== filterType) return false;
     if (searchQuery.trim()) {
@@ -109,11 +127,14 @@ export const IdeaLabView: React.FC = () => {
       return (
         idea.title.toLowerCase().includes(q) ||
         idea.hook.toLowerCase().includes(q) ||
-        idea.brandName.toLowerCase().includes(q)
+        (idea.brandName && idea.brandName.toLowerCase().includes(q))
       );
     }
     return true;
   });
+
+  const archivedIdeasCount = ideas.filter((i) => i.isArchived).length;
+  const activeIdeasCount = ideas.filter((i) => !i.isArchived).length;
 
   // Handle AI Idea Generation Call
   const handleGenerateAIIdeas = async () => {
@@ -326,11 +347,32 @@ export const IdeaLabView: React.FC = () => {
             <Target className="w-4 h-4" />
             <span>خطة النشر والأهداف اليومية (Weekly Targets)</span>
           </button>
+
+          <button
+            onClick={() => setActiveSubTab("archive")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs md:text-sm font-bold transition ${
+              activeSubTab === "archive"
+                ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
+                : "bg-white dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800"
+            }`}
+          >
+            <FolderArchive className="w-4 h-4" />
+            <span>أرشيف الأفكار والمنشورات ({archivedIdeasCount})</span>
+          </button>
         </div>
 
-        {/* View mode toggle for Pipeline */}
-        {activeSubTab === "pipeline" && (
-          <div className="flex items-center gap-2">
+        {/* View mode toggle and Auto-archive trigger for Pipeline */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => autoArchiveOldIdeas(14)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 text-xs font-bold transition"
+            title="أرشفة تلقائية للمنشورات والأفكار المنشورة والقديمة لتنظيم مساحة العمل"
+          >
+            <Archive className="w-3.5 h-3.5" />
+            <span>أرشفة تلقائية للمنتهي 🗂️</span>
+          </button>
+
+          {activeSubTab === "pipeline" && (
             <div className="flex items-center bg-white dark:bg-slate-850 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
               <button
                 onClick={() => setViewMode("board")}
@@ -349,8 +391,8 @@ export const IdeaLabView: React.FC = () => {
                 جدول المهام والمراحل
               </button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* ========================================================================= */}
@@ -666,18 +708,32 @@ export const IdeaLabView: React.FC = () => {
                   <option value="single_image">صورة مفردة</option>
                 </select>
               </div>
+
+              {/* Archive Status Filter */}
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-slate-500 dark:text-slate-400 font-semibold">العرض:</span>
+                <select
+                  value={archiveFilter}
+                  onChange={(e) => setArchiveFilter(e.target.value as any)}
+                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-800 dark:text-white focus:outline-none font-bold"
+                >
+                  <option value="active">الأفكار النشطة فقط ({activeIdeasCount})</option>
+                  <option value="archived">المؤرشف فقط ({archivedIdeasCount})</option>
+                  <option value="all">الكل ({ideas.length})</option>
+                </select>
+              </div>
             </div>
 
             {/* Pipeline Metrics Summary */}
             <div className="flex items-center gap-4 text-xs font-semibold">
               <span className="text-slate-500 dark:text-slate-400">
-                إجمالي الأفكار: <span className="font-bold text-slate-900 dark:text-white">{ideas.length}</span>
+                النشطة: <span className="font-bold text-indigo-600 dark:text-indigo-400">{activeIdeasCount}</span>
               </span>
               <span className="text-amber-600 dark:text-amber-400">
-                قيد العمل: <span className="font-bold">{ideas.filter((i) => i.stage !== "published").length}</span>
+                قيد العمل: <span className="font-bold">{ideas.filter((i) => !i.isArchived && i.stage !== "published").length}</span>
               </span>
-              <span className="text-emerald-600 dark:text-emerald-400">
-                جاهز ومنشور: <span className="font-bold">{ideas.filter((i) => i.stage === "ready" || i.stage === "published").length}</span>
+              <span className="text-purple-600 dark:text-purple-400">
+                المؤرشفة: <span className="font-bold">{archivedIdeasCount}</span>
               </span>
             </div>
           </div>
@@ -761,21 +817,35 @@ export const IdeaLabView: React.FC = () => {
 
                               {/* Action Buttons */}
                               <div className="flex items-center justify-between gap-1 pt-1">
-                                <button
-                                  onClick={() => setSelectedIdeaForDetail(idea)}
-                                  className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-[11px]"
-                                  title="عرض التفاصيل والسيناريو"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                </button>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => setSelectedIdeaForDetail(idea)}
+                                    className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-[11px]"
+                                    title="عرض التفاصيل والسيناريو"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </button>
 
-                                <button
-                                  onClick={() => setEditingIdeaModal(idea)}
-                                  className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-[11px]"
-                                  title="تعديل الفكرة"
-                                >
-                                  <Edit3 className="w-3.5 h-3.5" />
-                                </button>
+                                  <button
+                                    onClick={() => setEditingIdeaModal(idea)}
+                                    className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-[11px]"
+                                    title="تعديل الفكرة"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  <button
+                                    onClick={() => toggleArchiveIdea(idea.id)}
+                                    className={`p-1 rounded-lg transition text-[11px] ${
+                                      idea.isArchived
+                                        ? "hover:bg-purple-100 dark:hover:bg-purple-900/40 text-purple-600 dark:text-purple-400"
+                                        : "hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                                    }`}
+                                    title={idea.isArchived ? "إلغاء الأرشفة واستعادة للمسار" : "أرشفة الفكرة لتنظيم اللوحة"}
+                                  >
+                                    {idea.isArchived ? <ArchiveRestore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
+                                  </button>
+                                </div>
 
                                 {idea.stage !== "published" && (
                                   <button
@@ -891,6 +961,18 @@ export const IdeaLabView: React.FC = () => {
                               >
                                 <Sparkles className="w-3.5 h-3.5" />
                                 <span>استوديو النشر</span>
+                              </button>
+
+                              <button
+                                onClick={() => toggleArchiveIdea(idea.id)}
+                                className={`p-1.5 rounded-lg transition ${
+                                  idea.isArchived
+                                    ? "bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400"
+                                    : "hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
+                                }`}
+                                title={idea.isArchived ? "إلغاء الأرشفة" : "أرشفة"}
+                              >
+                                {idea.isArchived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
                               </button>
 
                               <button
@@ -1020,6 +1102,127 @@ export const IdeaLabView: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
+      {/* 3.5. SUB-TAB: ARCHIVED IDEAS AND POSTS */}
+      {/* ========================================================================= */}
+      {activeSubTab === "archive" && (
+        <div className="space-y-6 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-[#0f172a] rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                  <FolderArchive className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">أرشيف الأفكار والمنشورات المكتملة</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    هنا تجد جميع الأفكار والمنشورات التي تمت أرشفتها لتنظيم مساحة العمل. يمكنك استعادتها لأي مرحلة بنقرة واحدة.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => autoArchiveOldIdeas(14)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 text-xs font-bold transition"
+                >
+                  <Archive className="w-3.5 h-3.5" />
+                  <span>أرشفة الأفكار المنتهية تلقائياً</span>
+                </button>
+              </div>
+            </div>
+
+            {displayedIdeas.length === 0 ? (
+              <div className="py-16 text-center space-y-3">
+                <div className="w-14 h-14 mx-auto rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                  <Inbox className="w-7 h-7" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">الأرشيف فارغ حالياً</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+                  لم تقم بأرشفة أي أفكار بعد. يمكنك أرشفة الأفكار المكتملة والقديمة من لوحة كانبان أو جدول المهام.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {displayedIdeas.map((idea) => {
+                  const brandObj = brands.find((b) => b.id === idea.brandId);
+                  return (
+                    <div
+                      key={idea.id}
+                      className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-750 flex flex-col justify-between space-y-3 shadow-xs hover:border-purple-500/40 transition"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span
+                            className="text-[10px] px-2 py-0.5 rounded font-bold truncate max-w-[120px]"
+                            style={{
+                              backgroundColor: (brandObj?.primaryColor || "#6366F1") + "25",
+                              color: brandObj?.primaryColor || "#4f46e5",
+                            }}
+                          >
+                            {idea.brandName}
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-semibold flex items-center gap-1">
+                            <Archive className="w-3 h-3" />
+                            <span>مؤرشفة</span>
+                          </span>
+                        </div>
+
+                        <h4
+                          onClick={() => setSelectedIdeaForDetail(idea)}
+                          className="font-bold text-slate-900 dark:text-white text-sm hover:text-purple-600 dark:hover:text-purple-400 cursor-pointer line-clamp-2"
+                        >
+                          {idea.title}
+                        </h4>
+
+                        {idea.hook && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 italic">
+                            "{idea.hook}"
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="pt-3 border-t border-slate-200 dark:border-slate-750 flex items-center justify-between text-xs">
+                        <span className="text-[11px] text-slate-400">
+                          {idea.archivedAt ? new Date(idea.archivedAt).toLocaleDateString("ar-SA") : "مؤرشف"}
+                        </span>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => setSelectedIdeaForDetail(idea)}
+                            className="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-750 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300"
+                            title="عرض التفاصيل"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            onClick={() => toggleArchiveIdea(idea.id)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-xs transition"
+                            title="استعادة للمسار النشط"
+                          >
+                            <ArchiveRestore className="w-3.5 h-3.5" />
+                            <span>استعادة</span>
+                          </button>
+
+                          <button
+                            onClick={() => deleteIdea(idea.id)}
+                            className="p-1.5 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-500"
+                            title="حذف نهائي"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* 4. MODALS (DETAIL VIEW, EDITING MODAL, MANUAL ADD MODAL) */}
       {/* ========================================================================= */}
 
@@ -1138,16 +1341,38 @@ export const IdeaLabView: React.FC = () => {
 
             {/* Modal Bottom Actions */}
             <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
-              <button
-                onClick={() => {
-                  deleteIdea(selectedIdeaForDetail.id);
-                  setSelectedIdeaForDetail(null);
-                }}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>حذف الفكرة</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    deleteIdea(selectedIdeaForDetail.id);
+                    setSelectedIdeaForDetail(null);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>حذف الفكرة</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    toggleArchiveIdea(selectedIdeaForDetail.id);
+                    setSelectedIdeaForDetail(null);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-500/10 transition border border-purple-200 dark:border-purple-800/50"
+                >
+                  {selectedIdeaForDetail.isArchived ? (
+                    <>
+                      <ArchiveRestore className="w-4 h-4" />
+                      <span>إلغاء الأرشفة واستعادة</span>
+                    </>
+                  ) : (
+                    <>
+                      <Archive className="w-4 h-4" />
+                      <span>أرشفة الفكرة</span>
+                    </>
+                  )}
+                </button>
+              </div>
 
               <div className="flex items-center gap-2">
                 {selectedIdeaForDetail.stage !== "published" && (

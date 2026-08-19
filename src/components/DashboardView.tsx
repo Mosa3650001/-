@@ -77,8 +77,8 @@ export const DashboardView: React.FC = () => {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold mb-3 border border-indigo-500/30">
-              <Zap className="w-3.5 h-3.5" />
-              <span>مساحة العمل المتكاملة لمتاجر الملابس والأزياء</span>
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+              <span>SmartPost365 • مساحة العمل الذكية لإدارة المتاجر والسوشيال ميديا</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-black text-white leading-tight">
               {selectedBrand ? `لوحة قيادة: ${selectedBrand.name}` : "لوحة القيادة الموحدة لجميع المتاجر والمشاريع"}

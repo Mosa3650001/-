@@ -389,6 +389,133 @@ Return strictly JSON matching the response schema.
   }
 });
 
+// 3.5 AI Smart Multiple Reply Options Generator for Interactive Assistant & Chatbot
+app.post("/api/ai/suggest-replies", async (req: Request, res: Response) => {
+  try {
+    const {
+      brandName,
+      brandTone,
+      customerMessage,
+      customerName,
+      platform,
+      interactionType, // 'comment' | 'dm'
+      productContext,
+      storeGuidelines,
+    } = req.body;
+
+    const ai = getGenAI();
+
+    if (!ai) {
+      const namePrefix = customerName ? `${customerName} ` : "";
+      return res.json({
+        success: true,
+        source: "local-suggestions-engine",
+        intent: "general_inquiry",
+        sentiment: "positive",
+        customerSummary: "استفسار مباشر من الزبون بخصوص المنتجات أو الشراء",
+        suggestions: [
+          {
+            id: "opt-warm-friendly",
+            tone: "ودي ولطيف",
+            badge: "الأكثر شيوعاً 🌸",
+            reply: `يا هلا والله ${namePrefix}نورت ${brandName || "متجرنا"} 🤍 يسعدنا نخدمك بكل حب! تفضل بطلبك أو مقاسك وسنزودك بكل التفاصيل فوراً ✨`,
+            actionType: "invite_dm",
+          },
+          {
+            id: "opt-sales-closing",
+            tone: "تسويقي ومحفز للطلب",
+            badge: "زيادة مبيعات 🔥",
+            reply: `أهلاً بك ${namePrefix}🛍️ القطعة متوفرة حالياً وعليها إقبال كبير! اطلبها الآن واستفد من عروض الشحن السريع لباب بيتك 🚚📦`,
+            actionType: "send_order_link",
+          },
+          {
+            id: "opt-direct-concise",
+            tone: "مباشر ومختصر",
+            badge: "سريع ومحدد ⚡",
+            reply: `حياك الله ${namePrefix}! طلبك متوفر وجاهز للشحن الفوري. تفضل بمراسلتنا على الخاص أو الواتساب لتأكيد المقاس والكمية 💬`,
+            actionType: "whatsapp_transfer",
+          },
+        ],
+      });
+    }
+
+    const systemPrompt = `
+You are an advanced Arabic AI Customer Experience Chatbot & Assistant for "${brandName || "المتجر"}".
+Your role is to analyze a customer message (comment or DM) received from social media platforms (${platform || "social media"}), understand the customer intent and emotional state, and generate 3 to 4 distinct ready-to-send reply alternatives tailored to different conversational tones.
+
+Brand Tone Guidelines: ${brandTone || "ودودة، راقية، خدومة، سريعة، تشجع على إتمام الطلب"}
+Store & Product Context: ${productContext || "متجر ملابس راقي، خامات ممتازة، شحن وتوصيل فوري لجميع المدن، دفع إلكتروني وعند الاستلام"}
+Store Custom Guidelines: ${storeGuidelines || "رحب بالزبون، قدم إجابة مفيدة وواضحة، واقترح خطوة تالية للطلب"}
+
+Provide:
+1. "intent": Detected intent category (e.g. price_inquiry, size_availability, delivery_time, location_branches, compliment, return_exchange, complaint, general).
+2. "intentAr": Arabic readable intent (e.g. استفسار عن الأسعار، التحقق من المقاسات، السؤال عن الفروع، استفسار عن التوصيل).
+3. "sentiment": "positive" | "neutral" | "concerned" | "urgent".
+4. "sentimentAr": Arabic description (e.g. إيجابي ومتحمس، محايد وعملي، قلق أو مستعجل).
+5. "customerSummary": One brief sentence in Arabic explaining what the customer really needs.
+6. "suggestions": Array of exactly 3 distinct reply choices:
+   - Option 1 (Friendly & Welcoming): Warm, hospitable, high empathy.
+   - Option 2 (Sales & Action Driven): Energetic, highlights value/offers/speed, calls to finalize the order.
+   - Option 3 (Concise & Direct): Ultra clear, straight to the point, convenient for fast messaging.
+Each suggestion must include:
+- "id": string
+- "tone": Arabic tone name (e.g. ودود وترحيبي، تسويقي وإغلاق صفقة، سريع ومباشر)
+- "badge": short tag (e.g. الأكثر طلباً 🌸، تحفيز الشراء 🛍️، سريع ومختصر ⚡)
+- "reply": Complete Arabic message ready to send (1 to 3 concise lines with clean spacing and natural emojis).
+- "keyPointsCovered": brief bullet point of what this reply answers.
+
+Ensure output is valid JSON strictly following the schema.
+`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.7-flash",
+      contents: `Customer: "${customerName || "عميل"}" wrote on ${platform || "Instagram"}: "${customerMessage}". Generate contextual reply options.`,
+      config: {
+        systemInstruction: systemPrompt,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            intent: { type: Type.STRING },
+            intentAr: { type: Type.STRING },
+            sentiment: { type: Type.STRING },
+            sentimentAr: { type: Type.STRING },
+            customerSummary: { type: Type.STRING },
+            suggestions: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  tone: { type: Type.STRING },
+                  badge: { type: Type.STRING },
+                  reply: { type: Type.STRING },
+                  keyPointsCovered: { type: Type.STRING },
+                },
+                required: ["id", "tone", "badge", "reply"],
+              },
+            },
+          },
+          required: ["intent", "intentAr", "sentiment", "sentimentAr", "customerSummary", "suggestions"],
+        },
+      },
+    });
+
+    const parsed = JSON.parse(response.text || "{}");
+    return res.json({
+      success: true,
+      source: "gemini-3.7-flash",
+      ...parsed,
+    });
+  } catch (error: any) {
+    console.error("Error in /api/ai/suggest-replies:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Failed to generate suggested replies",
+    });
+  }
+});
+
 // 4. AI Best Posting Times & Recommendations
 app.post("/api/ai/suggest-times", async (req: Request, res: Response) => {
   try {
@@ -748,6 +875,36 @@ app.post("/api/ai/analyze-content", async (req: Request, res: Response) => {
 });
 
 
+// 7. Meta (Facebook/Instagram) User Data Deletion Callback Endpoint
+// Follows Meta Developer Platform Data Deletion Guidelines:
+// Returns JSON with 'url' and 'confirmation_code' for tracking deletion requests.
+app.post("/api/auth/data-deletion-callback", (req: Request, res: Response) => {
+  try {
+    const confirmationCode = `META-DEL-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const statusTrackingUrl = `${req.protocol}://${req.get("host")}/data-deletion?code=${confirmationCode}`;
+
+    console.log(`[Meta Data Deletion Request Received] Confirmation Code: ${confirmationCode}`);
+
+    // Return the response format expected by Meta Platform
+    return res.json({
+      url: statusTrackingUrl,
+      confirmation_code: confirmationCode,
+    });
+  } catch (error: any) {
+    console.error("Error handling Meta data deletion callback:", error);
+    return res.status(500).json({ error: "Failed to process data deletion callback" });
+  }
+});
+
+// Also support GET for browser inspection
+app.get("/api/auth/data-deletion-callback", (req: Request, res: Response) => {
+  res.json({
+    status: "active",
+    service: "SmartPost365 Meta Data Deletion Service",
+    instructions_url: `${req.protocol}://${req.get("host")}/data-deletion`,
+  });
+});
+
 // Vite & Static file serving
 async function start() {
   if (process.env.NODE_ENV !== "production") {
@@ -765,7 +922,7 @@ async function start() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`SocialHub AI Server listening on http://0.0.0.0:${PORT}`);
+    console.log(`SmartPost365 Server listening on http://0.0.0.0:${PORT}`);
   });
 }
 

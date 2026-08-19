@@ -145,7 +145,7 @@ export interface InboxItem {
   confidenceScore?: number;
 }
 
-export type UserRole = "super_admin" | "brand_manager" | "content_creator" | "inbox_agent" | "admin" | "editor" | "customer_support" | "viewer";
+export type UserRole = "super_admin" | "brand_manager" | "content_creator" | "inbox_agent" | "admin" | "editor" | "customer_support" | "viewer" | "owner" | "support";
 export type TeamRole = UserRole;
 
 export interface TeamMember {
@@ -232,6 +232,8 @@ export interface ContentIdea {
   priority: "low" | "medium" | "high" | "urgent";
   notes?: string;
   isAiGenerated: boolean;
+  isArchived?: boolean;
+  archivedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -246,8 +248,6 @@ export interface DailyPublishGoal {
   targetStoriesCount: number;
   notes?: string;
 }
-
-export type UserRole = "owner" | "admin" | "content_creator" | "support" | "viewer";
 
 export interface UserPermissions {
   canManageStores: boolean;
