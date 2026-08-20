@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { Brand, ConnectedAccount, SocialPlatform } from "../types";
 import { ApiIntegrationsModal } from "./ApiIntegrationsModal";
+import { FacebookPagesSyncModal } from "./FacebookPagesSyncModal";
 
 export const StoreSettingsView: React.FC = () => {
   const {
@@ -44,6 +45,7 @@ export const StoreSettingsView: React.FC = () => {
   const [isAddStoreModalOpen, setIsAddStoreModalOpen] = useState(false);
   const [isConnectAccountModalOpen, setIsConnectAccountModalOpen] = useState(false);
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
+  const [isFbSyncModalOpen, setIsFbSyncModalOpen] = useState(false);
   const [selectedAccountForApi, setSelectedAccountForApi] = useState<ConnectedAccount | null>(null);
 
   // New Brand Form
@@ -131,6 +133,15 @@ export const StoreSettingsView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsFbSyncModalOpen(true)}
+            className="px-4 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/25 transition flex items-center gap-2"
+          >
+            <Facebook className="w-4 h-4" />
+            <span>🔗 ربط صفحات فيسبوك السريع (Meta SDK)</span>
+          </button>
+
           <button
             type="button"
             onClick={() => {
@@ -582,6 +593,13 @@ export const StoreSettingsView: React.FC = () => {
         isOpen={isApiModalOpen}
         onClose={() => setIsApiModalOpen(false)}
         targetAccount={selectedAccountForApi}
+      />
+
+      {/* Facebook Pages SDK Quick Sync Modal */}
+      <FacebookPagesSyncModal
+        isOpen={isFbSyncModalOpen}
+        onClose={() => setIsFbSyncModalOpen(false)}
+        targetBrandId={activeBrandTab}
       />
     </div>
   );

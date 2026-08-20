@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useApp } from "../context/AppContext";
 import { ConnectedAccount, SocialPlatform } from "../types";
+import { FacebookPagesSyncModal } from "./FacebookPagesSyncModal";
 import {
   Key,
   ShieldCheck,
@@ -212,73 +213,67 @@ export const ApiIntegrationsModal: React.FC<{
     });
   };
 
+  const [isFbSyncModalOpen, setIsFbSyncModalOpen] = useState<boolean>(false);
+
   const handleFacebookOAuth = async () => {
     setIsConnectingOAuth(true);
+    setTestResult(null);
+
     try {
-      // Prompt OAuth via Firebase Meta Auth provider or mock discovery
-      const { auth, facebookProvider } = await import("../firebase");
-      const { signInWithPopup } = await import("firebase/auth");
-      
-      // Request page management scopes
-      facebookProvider.addScope("pages_show_list");
-      facebookProvider.addScope("pages_read_engagement");
-      facebookProvider.addScope("pages_manage_posts");
+      const { loginAndFetchFacebookPages } = await import("../utils/facebookSdk");
+      const res = await loginAndFetchFacebookPages();
 
-      const result = await signInWithPopup(auth, facebookProvider);
-      const credential = (result as any)._tokenResponse || {};
-      const oauthToken = credential.oauthAccessToken || `EAA${Math.random().toString(36).substring(2, 15)}...`;
-      const generatedPageId = `fb_page_${Math.floor(100000 + Math.random() * 900000)}`;
+      if (res.success && res.pages.length > 0) {
+        // Find match or use first page
+        const page = res.pages[0];
+        setTokenInput(page.access_token);
+        setIdInput(page.id);
+        setSecretInput("meta_sdk_verified");
 
-      setTokenInput(oauthToken);
-      setIdInput(generatedPageId);
-      setSecretInput("app_secret_verified_meta");
-      
-      updateConnectedAccount(activeAccount.id, {
-        apiToken: oauthToken,
-        accountId: generatedPageId,
-        pageId: generatedPageId,
-        apiSecret: "app_secret_verified_meta",
-        status: "connected",
-      });
-
-      addToast({
-        type: "success",
-        title: "🎉 تم ربط الصفحة بنجاح عبر Facebook OAuth!",
-        description: `تم جلب التوكن ومعرف الصفحة وتنشيط النشر التلقائي للحساب: ${activeAccount.accountName}`,
-      });
-
-      setTestResult({
-        tested: true,
-        success: true,
-        message: "تم التحقق من الصفحة والارتباط المباشر بنجاح!",
-        details: `الصفحة: ${activeAccount.accountName} - الصلاحيات: نشر وجدولة ومزامنة الرسائل.`,
-      });
-    } catch (err: any) {
-      console.error("Facebook OAuth Link error:", err);
-      if (err.code === "auth/popup-closed-by-user") {
-        addToast({
-          type: "warning",
-          title: "تم إلغاء نافذة الربط",
-          description: "أغلقت النافذة قبل اختيار الصفحة والموافقة على الصلاحيات.",
-        });
-      } else {
-        // Provide friendly fallback simulation
-        const demoToken = `EAAGm0PX4ZCpsBO${Math.random().toString(36).substring(2, 10)}ZDZD`;
-        const demoPageId = `109${Math.floor(10000000 + Math.random() * 90000000)}`;
-        setTokenInput(demoToken);
-        setIdInput(demoPageId);
         updateConnectedAccount(activeAccount.id, {
-          apiToken: demoToken,
-          accountId: demoPageId,
-          pageId: demoPageId,
+          apiToken: page.access_token,
+          accountId: page.id,
+          pageId: page.id,
+          accountName: page.name,
           status: "connected",
         });
+
         addToast({
           type: "success",
-          title: "✅ تم ربط الحساب وتفعيل بيئة العمل الفورية!",
-          description: `تم توليد وربط الـ Token والـ Page ID بنجاح لـ ${activeAccount.accountName}`,
+          title: `🎉 تم جلب صفحة "${page.name}" بنجاح!`,
+          description: `تم ربط الصفحة (ID: ${page.id}) واستخراج Page Access Token بصلاحيات النشر.`,
+        });
+
+        setTestResult({
+          tested: true,
+          success: true,
+          message: `✅ اتصال حقيقي ناجح بصفحة "${page.name}"!`,
+          details: `معرف الصفحة: ${page.id} - الفئة: ${page.category || "صفحة نشاط"} - الصلاحيات: نشر محتوى وإدارة الرسائل.`,
+        });
+
+        if (res.pages.length > 1) {
+          setIsFbSyncModalOpen(true);
+        }
+      } else if (res.success && res.pages.length === 0) {
+        addToast({
+          type: "warning",
+          title: "لم يتم العثور على صفحات مرتبطة بحسابك",
+          description: "يرجى التأكد من أن حسابك يملك صلاحية إدارة صفحة فيسبوك نشطة.",
+        });
+      } else {
+        addToast({
+          type: "error",
+          title: "تعذر إكمال الربط بفيسبوك",
+          description: res.error || "تأكد من إعدادات النطاق في Meta for Developers.",
         });
       }
+    } catch (err: any) {
+      console.error("Facebook SDK OAuth Error:", err);
+      addToast({
+        type: "error",
+        title: "خطأ أثناء تسجيل الدخول بفيسبوك",
+        description: err.message,
+      });
     } finally {
       setIsConnectingOAuth(false);
     }
@@ -746,6 +741,13 @@ export const ApiIntegrationsModal: React.FC<{
           </div>
         </div>
       </div>
+
+      {/* Facebook Pages SDK Discovery & Sync Modal */}
+      <FacebookPagesSyncModal
+        isOpen={isFbSyncModalOpen}
+        onClose={() => setIsFbSyncModalOpen(false)}
+        targetBrandId={activeAccount?.brandId}
+      />
     </div>
   );
 };

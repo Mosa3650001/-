@@ -973,9 +973,13 @@ app.post("/api/facebook/publish-post", async (req: Request, res: Response) => {
       });
     }
 
+    const postId = fbData.id || fbData.post_id;
+    const postUrl = postId ? `https://facebook.com/${postId}` : undefined;
+
     return res.json({
       success: true,
-      postId: fbData.id || fbData.post_id,
+      postId,
+      postUrl,
       message: "تم النشر الحقيقي على صفحة فيسبوك بنجاح!",
       publishedAt: new Date().toISOString(),
     });
@@ -984,6 +988,44 @@ app.post("/api/facebook/publish-post", async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: error.message || "تعذر إتمام النشر عبر Facebook Graph API",
+    });
+  }
+});
+
+app.post("/api/facebook/get-user-pages", async (req: Request, res: Response) => {
+  try {
+    const { userAccessToken } = req.body;
+    if (!userAccessToken) {
+      return res.status(400).json({
+        success: false,
+        error: "يرجى توفير User Access Token لجلب الصفحات.",
+      });
+    }
+
+    const cleanToken = userAccessToken.trim();
+    const fbUrl = `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,category,access_token,tasks,fan_count,picture.type(large),link&access_token=${encodeURIComponent(cleanToken)}`;
+
+    const fbRes = await fetch(fbUrl);
+    const fbData: any = await fbRes.json();
+
+    if (fbData.error) {
+      return res.status(400).json({
+        success: false,
+        error: `خطأ من فيسبوك (${fbData.error.type || fbData.error.code}): ${fbData.error.message}`,
+        details: fbData.error,
+      });
+    }
+
+    return res.json({
+      success: true,
+      pages: fbData.data || [],
+      message: `تم جلب ${fbData.data?.length || 0} صفحة مرتبطة بحسابك بنجاح!`,
+    });
+  } catch (error: any) {
+    console.error("Facebook Get Pages Error:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "تعذر الاتصال بـ Facebook Graph API",
     });
   }
 });

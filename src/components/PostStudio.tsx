@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { SocialPlatform, PostFormat, CatalogProduct } from "../types";
+import { FacebookPagesSyncModal } from "./FacebookPagesSyncModal";
+import { Facebook } from "lucide-react";
 
 // Common clothing color presets
 const COLOR_PRESETS = [
@@ -184,6 +186,7 @@ export const PostStudio: React.FC = () => {
   // Loading States
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [isSuggestingTime, setIsSuggestingTime] = useState(false);
+  const [isFbSyncModalOpen, setIsFbSyncModalOpen] = useState(false);
 
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
   const primaryBrand = brands.find((b) => b.id === selectedBrandIds[0]) || brands[0];
@@ -378,44 +381,51 @@ export const PostStudio: React.FC = () => {
 
     const status = asDraft ? "draft" : publishMode === "instant" ? "published" : "scheduled";
 
-    // If instant publish and targeting Facebook, check if connected account has live token
+    // If instant publish and targeting Facebook, check if connected accounts have live tokens
     if (!asDraft && publishMode === "instant" && targetPlatforms.includes("facebook")) {
-      const fbAccount = connectedAccounts.find(
-        (acc) => acc.platform === "facebook" && selectedBrandIds.includes(acc.brandId) && acc.apiToken && acc.apiToken.length > 20
+      const fbAccounts = connectedAccounts.filter(
+        (acc) =>
+          acc.platform === "facebook" &&
+          selectedBrandIds.includes(acc.brandId) &&
+          acc.apiToken &&
+          acc.apiToken.length > 20 &&
+          (acc.pageId || acc.accountId)
       );
 
-      if (fbAccount && fbAccount.apiToken && (fbAccount.pageId || fbAccount.accountId)) {
+      if (fbAccounts.length > 0) {
         const fbContent = contentPerPlatform.facebook || platformContents.facebook;
         const fullMessage = `${fbContent.hook ? fbContent.hook + "\n\n" : ""}${fbContent.caption}\n\n${(fbContent.hashtags || []).join(" ")}\n\n${fbContent.callToAction || ""}`;
 
-        try {
-          const fbRes = await fetch("/api/facebook/publish-post", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              pageId: fbAccount.pageId || fbAccount.accountId,
-              pageAccessToken: fbAccount.apiToken,
-              message: fullMessage.trim(),
-              imageUrl: selectedImage,
-            }),
-          });
-          const fbData = await fbRes.json();
+        for (const fbAccount of fbAccounts) {
+          try {
+            const fbRes = await fetch("/api/facebook/publish-post", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                pageId: fbAccount.pageId || fbAccount.accountId,
+                pageAccessToken: fbAccount.apiToken,
+                message: fullMessage.trim(),
+                imageUrl: selectedImage,
+              }),
+            });
+            const fbData = await fbRes.json();
 
-          if (fbData.success) {
-            addToast({
-              type: "success",
-              title: "🎉 تم النشر المباشر بنجاح على صفحة فيسبوك!",
-              description: `معرف المنشور: ${fbData.postId}`,
-            });
-          } else {
-            addToast({
-              type: "warning",
-              title: "تنبيه أثناء النشر على فيسبوك",
-              description: fbData.error || "يرجى التحقق من صلاحيات التوكن",
-            });
+            if (fbData.success) {
+              addToast({
+                type: "success",
+                title: `🎉 تم النشر المباشر بنجاح على صفحة "${fbAccount.accountName}"!`,
+                description: `معرف المنشور: ${fbData.postId}`,
+              });
+            } else {
+              addToast({
+                type: "warning",
+                title: `تنبيه أثناء النشر على صفحة ${fbAccount.accountName}`,
+                description: fbData.error || "يرجى التحقق من صلاحيات التوكن",
+              });
+            }
+          } catch (e: any) {
+            console.error("Facebook live publish error:", e);
           }
-        } catch (e: any) {
-          console.error("Facebook live publish error:", e);
         }
       }
     }
@@ -470,7 +480,16 @@ export const PostStudio: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsFbSyncModalOpen(true)}
+            className="px-3.5 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700 text-xs font-bold transition flex items-center gap-1.5"
+          >
+            <Facebook className="w-3.5 h-3.5" />
+            <span>ربط وتجربة صفحات فيسبوك</span>
+          </button>
+
           <button
             type="button"
             onClick={() => handleSubmitPost(true)}
@@ -1161,6 +1180,13 @@ export const PostStudio: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Facebook Pages SDK Discovery & Sync Modal */}
+      <FacebookPagesSyncModal
+        isOpen={isFbSyncModalOpen}
+        onClose={() => setIsFbSyncModalOpen(false)}
+        targetBrandId={selectedBrandIds[0]}
+      />
     </div>
   );
 };
