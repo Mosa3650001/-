@@ -44,6 +44,7 @@ export const PostStudio: React.FC = () => {
     currentBrandId,
     templates,
     products,
+    connectedAccounts,
     createPost,
     editingPost,
     setEditingPost,
@@ -351,7 +352,7 @@ export const PostStudio: React.FC = () => {
   };
 
   // Submit and Schedule / Publish Post
-  const handleSubmitPost = (asDraft = false) => {
+  const handleSubmitPost = async (asDraft = false) => {
     if (!productTitle.trim()) {
       addToast({ type: "error", title: "يرجى كتابة عنوان أو اسم القطعة" });
       return;
@@ -376,6 +377,48 @@ export const PostStudio: React.FC = () => {
     });
 
     const status = asDraft ? "draft" : publishMode === "instant" ? "published" : "scheduled";
+
+    // If instant publish and targeting Facebook, check if connected account has live token
+    if (!asDraft && publishMode === "instant" && targetPlatforms.includes("facebook")) {
+      const fbAccount = connectedAccounts.find(
+        (acc) => acc.platform === "facebook" && selectedBrandIds.includes(acc.brandId) && acc.apiToken && acc.apiToken.length > 20
+      );
+
+      if (fbAccount && fbAccount.apiToken && (fbAccount.pageId || fbAccount.accountId)) {
+        const fbContent = contentPerPlatform.facebook || platformContents.facebook;
+        const fullMessage = `${fbContent.hook ? fbContent.hook + "\n\n" : ""}${fbContent.caption}\n\n${(fbContent.hashtags || []).join(" ")}\n\n${fbContent.callToAction || ""}`;
+
+        try {
+          const fbRes = await fetch("/api/facebook/publish-post", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              pageId: fbAccount.pageId || fbAccount.accountId,
+              pageAccessToken: fbAccount.apiToken,
+              message: fullMessage.trim(),
+              imageUrl: selectedImage,
+            }),
+          });
+          const fbData = await fbRes.json();
+
+          if (fbData.success) {
+            addToast({
+              type: "success",
+              title: "🎉 تم النشر المباشر بنجاح على صفحة فيسبوك!",
+              description: `معرف المنشور: ${fbData.postId}`,
+            });
+          } else {
+            addToast({
+              type: "warning",
+              title: "تنبيه أثناء النشر على فيسبوك",
+              description: fbData.error || "يرجى التحقق من صلاحيات التوكن",
+            });
+          }
+        } catch (e: any) {
+          console.error("Facebook live publish error:", e);
+        }
+      }
+    }
 
     createPost({
       title: productTitle,

@@ -875,7 +875,120 @@ app.post("/api/ai/analyze-content", async (req: Request, res: Response) => {
 });
 
 
-// 7. Meta (Facebook/Instagram) User Data Deletion Callback Endpoint
+// 7. Real Facebook Graph API Direct Publishing & Verification Endpoints
+app.post("/api/facebook/test-connection", async (req: Request, res: Response) => {
+  try {
+    const { pageId, pageAccessToken } = req.body;
+    if (!pageAccessToken || !pageId) {
+      return res.status(400).json({
+        success: false,
+        error: "يرجى توفير كل من Page ID و Page Access Token للفحص المباشر مع فيسبوك.",
+      });
+    }
+
+    // Call Facebook Graph API to inspect page
+    const cleanToken = pageAccessToken.trim();
+    const cleanPageId = pageId.trim();
+    const fbUrl = `https://graph.facebook.com/v19.0/${cleanPageId}?fields=id,name,category,fan_count,verification_status,link&access_token=${encodeURIComponent(cleanToken)}`;
+    
+    const fbRes = await fetch(fbUrl);
+    const fbData: any = await fbRes.json();
+
+    if (fbData.error) {
+      return res.status(400).json({
+        success: false,
+        error: `خطأ من فيسبوك (${fbData.error.type || fbData.error.code}): ${fbData.error.message}`,
+        details: fbData.error,
+      });
+    }
+
+    return res.json({
+      success: true,
+      pageName: fbData.name,
+      pageId: fbData.id,
+      category: fbData.category,
+      fanCount: fbData.fan_count,
+      link: fbData.link,
+      message: `تم التحقق بنجاح من صفحة "${fbData.name}" وهي متصلة ومصرح لها بالنشر!`,
+    });
+  } catch (error: any) {
+    console.error("Facebook API Test Connection Error:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "تعذر الاتصال بـ Facebook Graph API",
+    });
+  }
+});
+
+app.post("/api/facebook/publish-post", async (req: Request, res: Response) => {
+  try {
+    const { pageId, pageAccessToken, message, link, imageUrl } = req.body;
+
+    if (!pageAccessToken || !pageId) {
+      return res.status(400).json({
+        success: false,
+        error: "بيانات الربط غير مكتملة (Page Access Token أو Page ID مفقود).",
+      });
+    }
+
+    const cleanToken = pageAccessToken.trim();
+    const cleanPageId = pageId.trim();
+
+    let fbRes;
+    if (imageUrl && (imageUrl.startsWith("http://") || imageUrl.startsWith("https://"))) {
+      // Publish as Photo Post
+      const fbPhotoUrl = `https://graph.facebook.com/v19.0/${cleanPageId}/photos`;
+      fbRes = await fetch(fbPhotoUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: imageUrl,
+          caption: message || "",
+          access_token: cleanToken,
+        }),
+      });
+    } else {
+      // Publish as Feed Post (Text + Link)
+      const fbFeedUrl = `https://graph.facebook.com/v19.0/${cleanPageId}/feed`;
+      const bodyPayload: any = {
+        message: message || "",
+        access_token: cleanToken,
+      };
+      if (link) bodyPayload.link = link;
+
+      fbRes = await fetch(fbFeedUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bodyPayload),
+      });
+    }
+
+    const fbData: any = await fbRes.json();
+
+    if (fbData.error) {
+      return res.status(400).json({
+        success: false,
+        error: `فشل النشر على فيسبوك (${fbData.error.type || fbData.error.code}): ${fbData.error.message}`,
+        details: fbData.error,
+      });
+    }
+
+    return res.json({
+      success: true,
+      postId: fbData.id || fbData.post_id,
+      message: "تم النشر الحقيقي على صفحة فيسبوك بنجاح!",
+      publishedAt: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error("Facebook Publish Error:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "تعذر إتمام النشر عبر Facebook Graph API",
+    });
+  }
+});
+
+// 8. Meta (Facebook/Instagram) User Data Deletion Callback Endpoint
 // Follows Meta Developer Platform Data Deletion Guidelines:
 // Returns JSON with 'url' and 'confirmation_code' for tracking deletion requests.
 app.post("/api/auth/data-deletion-callback", (req: Request, res: Response) => {
