@@ -37,11 +37,20 @@ export const StoreSettingsView: React.FC = () => {
     deleteBrand,
     connectedAccounts,
     toggleAccountStatus,
+    updateConnectedAccount,
+    deleteConnectedAccount,
     connectNewAccount,
     addToast,
   } = useApp();
 
   const [activeBrandTab, setActiveBrandTab] = useState<string>(brands[0]?.id || "");
+
+  // Ensure activeBrandTab always points to a valid existing brand
+  React.useEffect(() => {
+    if (brands.length > 0 && !brands.some((b) => b.id === activeBrandTab)) {
+      setActiveBrandTab(brands[0].id);
+    }
+  }, [brands, activeBrandTab]);
   const [isAddStoreModalOpen, setIsAddStoreModalOpen] = useState(false);
   const [isConnectAccountModalOpen, setIsConnectAccountModalOpen] = useState(false);
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
@@ -348,6 +357,19 @@ export const StoreSettingsView: React.FC = () => {
                           }`}
                         >
                           {account.status === "connected" ? "✓ متصل" : "معطل"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`هل أنت متأكد من حذف الحساب (${account.accountName})؟`)) {
+                              deleteConnectedAccount(account.id);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition"
+                          title="حذف هذا الحساب نهائياً"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>

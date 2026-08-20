@@ -93,6 +93,7 @@ interface AppContextType {
   // Connected Accounts
   toggleAccountStatus: (id: string) => void;
   updateConnectedAccount: (id: string, updates: Partial<ConnectedAccount>) => void;
+  deleteConnectedAccount: (id: string) => void;
   connectNewAccount: (brandId: string, platform: SocialPlatform, handle: string, name: string, apiToken?: string, accountId?: string) => void;
 
   // Team Actions
@@ -558,7 +559,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const publishPostNow = (id: string) => {
+  const publishPostNow = async (id: string) => {
+    const post = posts.find((p) => p.id === id);
+    if (!post) return;
+
+    // Check if post targets Facebook and we have live Facebook accounts configured
+    if (post.targetPlatforms.includes("facebook")) {
+      const fbAccounts = connectedAccounts.filter(
+        (acc) =>
+          acc.platform === "facebook" &&
+          (post.brandId === "all" || post.brandId === acc.brandId || (post.targetBrandIds && post.targetBrandIds.includes(acc.brandId))) &&
+          acc.apiToken &&
+          acc.apiToken.length > 20 &&
+          (acc.pageId || acc.accountId)
+      );
+
+      if (fbAccounts.length > 0) {
+        const fbContent = post.contentPerPlatform?.facebook;
+        const msg = fbContent
+          ? `${fbContent.hook ? fbContent.hook + "\n\n" : ""}${fbContent.caption}\n\n${(fbContent.hashtags || []).join(" ")}\n\n${fbContent.callToAction || ""}`
+          : post.title;
+
+        for (const fbAccount of fbAccounts) {
+          try {
+            const fbRes = await fetch("/api/facebook/publish-post", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                pageId: fbAccount.pageId || fbAccount.accountId,
+                pageAccessToken: fbAccount.apiToken,
+                message: msg.trim(),
+                imageUrl: post.mediaUrls?.[0],
+              }),
+            });
+            const fbData = await fbRes.json();
+            if (fbData.success) {
+              addToast({
+                type: "success",
+                title: `🎉 تم النشر المباشر بنجاح على صفحة "${fbAccount.accountName}"!`,
+                description: `معرف المنشور: ${fbData.postId || "Live Facebook Post"}`,
+              });
+            } else {
+              addToast({
+                type: "warning",
+                title: `تنبيه من فيسبوك (${fbAccount.accountName})`,
+                description: fbData.error || "تأكد من صلاحيات النشر للصفحة.",
+              });
+            }
+          } catch (e: any) {
+            console.error("Facebook live publish error in publishPostNow:", e);
+          }
+        }
+      }
+    }
+
     const updatePayload = {
       status: "published" as const,
       publishedAt: new Date().toISOString(),
@@ -751,6 +805,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const deleteConnectedAccount = (id: string) => {
+    setConnectedAccounts((prev) => prev.filter((acc) => acc.id !== id));
+    deleteDocument(COLLECTIONS.ACCOUNTS, id);
+    addToast({
+      type: "info",
+      title: "تم حذف الحساب ومزامنته سحابياً بنجاح",
+    });
+  };
+
   const connectNewAccount = (
     brandId: string,
     platform: SocialPlatform,
@@ -874,6 +937,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteBrand,
         toggleAccountStatus,
         updateConnectedAccount,
+        deleteConnectedAccount,
         connectNewAccount,
         createTeamMember,
         updateTeamMember,

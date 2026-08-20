@@ -163,7 +163,16 @@ export const ApiIntegrationsModal: React.FC<{
     targetAccount?.id || connectedAccounts[0]?.id || ""
   );
 
-  const activeAccount = connectedAccounts.find((a) => a.id === selectedAccountId) || connectedAccounts[0];
+  // Sync selected account when targetAccount changes (e.g. user clicks key on another account)
+  React.useEffect(() => {
+    if (targetAccount?.id) {
+      setSelectedAccountId(targetAccount.id);
+    } else if (!selectedAccountId && connectedAccounts.length > 0) {
+      setSelectedAccountId(connectedAccounts[0].id);
+    }
+  }, [targetAccount, isOpen, connectedAccounts]);
+
+  const activeAccount = (selectedAccountId ? connectedAccounts.find((a) => a.id === selectedAccountId) : null) || targetAccount || connectedAccounts[0];
   const activeBrand = brands.find((b) => b.id === activeAccount?.brandId);
   const guide = activeAccount ? PLATFORM_GUIDES[activeAccount.platform] : PLATFORM_GUIDES.facebook;
 
