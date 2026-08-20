@@ -39,7 +39,15 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
   onClose,
   targetBrandId,
 }) => {
-  const { brands, connectedAccounts, updateConnectedAccount, connectNewAccount, addToast } = useApp();
+  const {
+    brands,
+    connectedAccounts,
+    updateConnectedAccount,
+    connectNewAccount,
+    syncRawFacebookPagesToFirestore,
+    syncAllFacebookPagesWithFirestore,
+    addToast,
+  } = useApp();
 
   const [appId, setAppId] = useState<string>(() => getStoredFacebookAppId());
   const [isEditingAppId, setIsEditingAppId] = useState<boolean>(false);
@@ -48,6 +56,8 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
   const [selectedBrandForPage, setSelectedBrandForPage] = useState<Record<string, string>>({});
   const [manualUserToken, setManualUserToken] = useState<string>("");
   const [isFetchingManual, setIsFetchingManual] = useState<boolean>(false);
+  const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
+  const [showPermissionGuide, setShowPermissionGuide] = useState<boolean>(false);
 
   // Test Post State
   const [testPageId, setTestPageId] = useState<string>("");
@@ -114,10 +124,13 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
           setTestPageId(res.pages[0].id);
         }
 
+        // Automatically sync with Firestore for permanent persistence
+        await syncRawFacebookPagesToFirestore(res.pages, defaultBrand);
+
         addToast({
           type: "success",
-          title: `🎉 تم العثور على ${res.pages.length} صفحة فيسبوك بنجاح!`,
-          description: "يمكنك الآن ربط الصفحات بضغطة زر واحدة وتجربة النشر الحي.",
+          title: `🎉 تم جلب ومزامنة ${res.pages.length} صفحة فيسبوك في Firestore!`,
+          description: "الصفحات الآن مسجلة بشكل دائم في قاعدة البيانات دون اختفاء.",
         });
       } else if (res.success && res.pages.length === 0) {
         addToast({
@@ -151,34 +164,25 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
 
     setIsFetchingManual(true);
     try {
-      const res = await fetch("/api/facebook/get-user-pages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userAccessToken: manualUserToken.trim() }),
-      });
-      const data = await res.json();
+      const syncResult = await syncAllFacebookPagesWithFirestore(
+        manualUserToken.trim(),
+        targetBrandId || brands[0]?.id
+      );
 
-      if (data.success && data.pages) {
-        setDiscoveredPages(data.pages);
-        const defaultBrand = targetBrandId || brands[0]?.id || "";
-        const map: Record<string, string> = {};
-        data.pages.forEach((p: FacebookPageItem) => {
-          map[p.id] = defaultBrand;
+      if (syncResult.success && syncResult.count > 0) {
+        // Also fetch list for current preview
+        const res = await fetch("/api/facebook/get-user-pages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userAccessToken: manualUserToken.trim() }),
         });
-        setSelectedBrandForPage(map);
-        if (!testPageId && data.pages.length > 0) {
-          setTestPageId(data.pages[0].id);
+        const data = await res.json();
+        if (data.pages) {
+          setDiscoveredPages(data.pages);
+          if (data.pages.length > 0 && !testPageId) {
+            setTestPageId(data.pages[0].id);
+          }
         }
-        addToast({
-          type: "success",
-          title: `✅ تم استيراد ${data.pages.length} صفحة بنجاح!`,
-        });
-      } else {
-        addToast({
-          type: "error",
-          title: "فشل استيراد الصفحات",
-          description: data.error || "رمز الوصول غير صالح أو منتهي الصلاحية.",
-        });
       }
     } catch (e: any) {
       addToast({ type: "error", title: "خطأ بالاتصال", description: e.message });
@@ -187,58 +191,21 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
     }
   };
 
-  const handleConnectSinglePage = (page: FacebookPageItem) => {
+  const handleConnectSinglePage = async (page: FacebookPageItem) => {
     const brandId = selectedBrandForPage[page.id] || brands[0]?.id;
     if (!brandId) return;
 
-    // Check if account already exists
-    const existing = connectedAccounts.find(
-      (a) => a.platform === "facebook" && (a.pageId === page.id || a.accountId === page.id)
-    );
-
-    if (existing) {
-      updateConnectedAccount(existing.id, {
-        accountName: page.name,
-        pageId: page.id,
-        accountId: page.id,
-        apiToken: page.access_token,
-        brandId,
-        avatar: page.picture?.data?.url || existing.avatar,
-        status: "connected",
-      });
-      addToast({
-        type: "success",
-        title: `✅ تم تحديث وتنشيط ربط صفحة "${page.name}"!`,
-        description: "رمز وصول الصفحة متصل وجاهز للنشر المباشر.",
-      });
-    } else {
-      connectNewAccount(
-        brandId,
-        "facebook",
-        `@${page.name.toLowerCase().replace(/\s+/g, "_")}`,
-        page.name,
-        page.access_token,
-        page.id
-      );
-      addToast({
-        type: "success",
-        title: `🎉 تمت إضافة صفحة "${page.name}" كحساب رسمي نشط!`,
-      });
-    }
+    await syncRawFacebookPagesToFirestore([page], brandId);
   };
 
-  const handleConnectAllPages = () => {
+  const handleConnectAllPages = async () => {
     if (discoveredPages.length === 0) return;
-
-    discoveredPages.forEach((page) => {
-      handleConnectSinglePage(page);
-    });
-
-    addToast({
-      type: "success",
-      title: `🚀 تم ربط وتنشيط جميع الصفحات (${discoveredPages.length}) بنجاح!`,
-      description: "جميع الصفحات أصبحت جاهزة للنشر المباشر والجدولة.",
-    });
+    setIsSyncingCloud(true);
+    try {
+      await syncRawFacebookPagesToFirestore(discoveredPages, targetBrandId || brands[0]?.id);
+    } finally {
+      setIsSyncingCloud(false);
+    }
   };
 
   const handleExecuteLiveTestPublish = async () => {
@@ -339,6 +306,88 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-6">
+          {/* Permission Guide Alert / Banner */}
+          <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700/50 flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <div className="text-xs">
+                <div className="font-bold text-amber-900 dark:text-amber-200">
+                  هل تواجه خطأ (#200) أو مشاكل في أذونات النشر؟
+                </div>
+                <div className="text-amber-700 dark:text-amber-400">
+                  شاهد الشرح الشامل لإعداد الصلاحيات ودور المستخدم واستخراج Page Access Token الصحيح.
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowPermissionGuide(!showPermissionGuide)}
+              className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition flex items-center gap-1.5"
+            >
+              <Info className="w-3.5 h-3.5" />
+              <span>{showPermissionGuide ? "إخفاء الدليل" : "عرض دليل حل خطأ (#200)"}</span>
+            </button>
+          </div>
+
+          {/* Expandable Error 200 Guide */}
+          {showPermissionGuide && (
+            <div className="p-5 rounded-3xl bg-slate-900 text-slate-100 border border-indigo-500/30 space-y-4 animate-in fade-in slide-in-from-top-3 duration-200">
+              <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                <ShieldCheck className="w-5 h-5 text-indigo-400" />
+                <h4 className="font-black text-sm text-white">
+                  دليل إدارة الصلاحيات وتفادي خطأ (#200) Permission Error في فيسبوك
+                </h4>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <div className="p-3.5 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-1.5">
+                  <div className="font-bold text-amber-300 flex items-center gap-1.5">
+                    <span>1. استخدام Page Token بدلاً من User Token</span>
+                  </div>
+                  <p className="text-slate-300 leading-relaxed text-[11px]">
+                    خطأ (#200) يحدث غالباً عند محاولة النشر على رابط الصفحة <code>/{`{page-id}`}/feed</code> باستخدام رمز وصول المستخدم (User Token) بدلاً من رمز وصول الصفحة (Page Access Token). عند المزامنة، يقوم تطبيقنا تلقائياً باستخراج الـ Page Token الخاص بكل صفحة وحفظه سحابياً.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-1.5">
+                  <div className="font-bold text-emerald-300 flex items-center gap-1.5">
+                    <span>2. الصلاحيات (Scopes) الإلزامية في Meta</span>
+                  </div>
+                  <p className="text-slate-300 leading-relaxed text-[11px]">
+                    عند إنشاء التوكن في Graph API Explorer، يجب تحديد الصلاحيات التالية:
+                  </p>
+                  <div className="flex flex-wrap gap-1 font-mono text-[10px]">
+                    <span className="px-1.5 py-0.5 rounded bg-indigo-900/60 text-indigo-300 border border-indigo-700">pages_show_list</span>
+                    <span className="px-1.5 py-0.5 rounded bg-indigo-900/60 text-indigo-300 border border-indigo-700">pages_read_engagement</span>
+                    <span className="px-1.5 py-0.5 rounded bg-indigo-900/60 text-indigo-300 border border-indigo-700">pages_manage_posts</span>
+                    <span className="px-1.5 py-0.5 rounded bg-indigo-900/60 text-indigo-300 border border-indigo-700">publish_video</span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-1.5">
+                  <div className="font-bold text-blue-300 flex items-center gap-1.5">
+                    <span>3. دور الحساب داخل الصفحة (Page Access Tasks)</span>
+                  </div>
+                  <p className="text-slate-300 leading-relaxed text-[11px]">
+                    في تجربة الصفحات الجديدة (New Pages Experience)، ادخل إلى إعدادات الصفحة ⟵ <b>وصول الصفحة (Page Access)</b> وتأكد أن حسابك يمتلك صلاحية <b>إنشاء المحتوى (Content Creation)</b> أو <b>التحكم الكامل (Full Control)</b>.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-1.5">
+                  <div className="font-bold text-violet-300 flex items-center gap-1.5">
+                    <span>4. وضع التطبيق (Development vs Live Mode)</span>
+                  </div>
+                  <p className="text-slate-300 leading-relaxed text-[11px]">
+                    إذا كان تطبيق Meta App الخاص بك في وضع التطوير (Development Mode)، فلن يُسمح بالنشر إلا للمستخدمين المضافين كـ <b>Admins/Developers/Testers</b> داخل لوحة Meta Developers. لنشر أي صفحة أخرى، انقل التطبيق إلى Live Mode أو أضف الحساب في لوحة الأدوار.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* App ID Quick Configuration Bar */}
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">

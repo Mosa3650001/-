@@ -29,6 +29,9 @@ import {
   saveDocument,
   deleteDocument,
   seedInitialFirestoreData,
+  syncFacebookPagesToFirestore,
+  fetchAndSyncAllUserPagesToFirestore,
+  FacebookRawPage,
   COLLECTIONS,
 } from "../services/firebaseDb";
 
@@ -95,6 +98,8 @@ interface AppContextType {
   updateConnectedAccount: (id: string, updates: Partial<ConnectedAccount>) => void;
   deleteConnectedAccount: (id: string) => void;
   connectNewAccount: (brandId: string, platform: SocialPlatform, handle: string, name: string, apiToken?: string, accountId?: string) => void;
+  syncAllFacebookPagesWithFirestore: (userAccessToken: string, defaultBrandId?: string) => Promise<{ success: boolean; count: number; error?: string }>;
+  syncRawFacebookPagesToFirestore: (pages: FacebookRawPage[], defaultBrandId?: string) => Promise<{ success: boolean; count: number; error?: string }>;
 
   // Team Actions
   createTeamMember: (member: Omit<TeamMember, "id" | "joinedDate">) => TeamMember;
@@ -849,6 +854,78 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const syncRawFacebookPagesToFirestore = async (
+    pages: FacebookRawPage[],
+    defaultBrandId?: string
+  ): Promise<{ success: boolean; count: number; error?: string }> => {
+    try {
+      const res = await syncFacebookPagesToFirestore(pages, defaultBrandId, brands);
+      if (res.success && res.syncedAccounts.length > 0) {
+        setConnectedAccounts((prev) => {
+          const map = new Map(prev.map((a) => [a.id, a]));
+          res.syncedAccounts.forEach((acc) => map.set(acc.id, acc));
+          return Array.from(map.values());
+        });
+        if (res.updatedBrands && res.updatedBrands.length > 0) {
+          setBrands(res.updatedBrands);
+        }
+        setIsCloudSynced(true);
+        addToast({
+          type: "success",
+          title: `🎉 تمت مزامنة وحفظ ${res.syncedAccounts.length} صفحة فيسبوك سحابياً في Firestore!`,
+          description: "الصفحات الآن مسجلة بشكل دائم ومتاحة للنشر والإدارة دون اختفاء.",
+        });
+        return { success: true, count: res.syncedAccounts.length };
+      } else {
+        addToast({
+          type: "error",
+          title: "تعذر إتمام المزامنة",
+          description: res.error || "تأكد من صحة الصفحات والبيانات.",
+        });
+        return { success: false, count: 0, error: res.error };
+      }
+    } catch (e: any) {
+      addToast({ type: "error", title: "خطأ في المزامنة", description: e.message });
+      return { success: false, count: 0, error: e.message };
+    }
+  };
+
+  const syncAllFacebookPagesWithFirestore = async (
+    userAccessToken: string,
+    defaultBrandId?: string
+  ): Promise<{ success: boolean; count: number; error?: string }> => {
+    try {
+      const res = await fetchAndSyncAllUserPagesToFirestore(userAccessToken, defaultBrandId, brands);
+      if (res.success && res.syncedAccounts.length > 0) {
+        setConnectedAccounts((prev) => {
+          const map = new Map(prev.map((a) => [a.id, a]));
+          res.syncedAccounts.forEach((acc) => map.set(acc.id, acc));
+          return Array.from(map.values());
+        });
+        if (res.updatedBrands && res.updatedBrands.length > 0) {
+          setBrands(res.updatedBrands);
+        }
+        setIsCloudSynced(true);
+        addToast({
+          type: "success",
+          title: `🎉 تمت المزامنة الشاملة لـ ${res.syncedAccounts.length} صفحة فيسبوك مع Firestore!`,
+          description: "تم تحديث كافة المتاجر والصفحات مع رموز الوصول الدائمة.",
+        });
+        return { success: true, count: res.syncedAccounts.length };
+      } else {
+        addToast({
+          type: "error",
+          title: "تعذر جلب الصفحات من فيسبوك",
+          description: res.error || "تأكد من تفعيل صلاحيات pages_show_list و pages_manage_posts.",
+        });
+        return { success: false, count: 0, error: res.error };
+      }
+    } catch (e: any) {
+      addToast({ type: "error", title: "خطأ في الاتصال", description: e.message });
+      return { success: false, count: 0, error: e.message };
+    }
+  };
+
   // --- TEAM METHODS ---
   const createTeamMember = (memberData: Omit<TeamMember, "id" | "joinedDate">): TeamMember => {
     const newMember: TeamMember = {
@@ -939,6 +1016,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateConnectedAccount,
         deleteConnectedAccount,
         connectNewAccount,
+        syncAllFacebookPagesWithFirestore,
+        syncRawFacebookPagesToFirestore,
         createTeamMember,
         updateTeamMember,
         deleteTeamMember,
