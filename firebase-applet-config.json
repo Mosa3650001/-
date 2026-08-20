@@ -1,12 +1,12 @@
 {
-  "projectId": "calcium-now-df6jr",
-  "appId": "1:576054080320:web:422fe85f3f627e0d0a00a5",
-  "apiKey": "AIzaSyBO43a3N_RlhS9tvPOfXaqqPFDSPKE_E_E",
-  "authDomain": "calcium-now-df6jr.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-socialhubaimulti-f6e2b7fe-4255-484c-8273-d6ba82b907f7",
-  "storageBucket": "calcium-now-df6jr.firebasestorage.app",
-  "messagingSenderId": "576054080320",
-  "measurementId": "",
-  "oAuthClientId": "576054080320-3u8ck9urr89pbbmbh5geih7v2s16365c.apps.googleusercontent.com",
+  "projectId": "smartpost365-24",
+  "appId": "1:943881875361:web:540144cfb0a08222e725e0",
+  "apiKey": "AIzaSyAdSYjKn19hcLzCqhdChLHvhzhh9x_4bsk",
+  "authDomain": "smartpost365-24.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "smartpost365-24.firebasestorage.app",
+  "messagingSenderId": "943881875361",
+  "measurementId": "G-KD068N2JZR",
+  "oAuthClientId": "",
   "recaptchaSiteKey": ""
 }
