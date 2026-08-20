@@ -966,9 +966,17 @@ app.post("/api/facebook/publish-post", async (req: Request, res: Response) => {
     const fbData: any = await fbRes.json();
 
     if (fbData.error) {
+      const err = fbData.error;
+      let errorMsg = `فشل النشر على فيسبوك (${err.code || err.type}): ${err.message}`;
+      if (err.code === 200 || err.code === 10) {
+        errorMsg = "خطأ الصلاحيات (#200): تأكد من استخدام Page Access Token وليس User Token، وتأكد من أن حسابك يملك صلاحية 'إنشاء المحتوى' في إعدادات الصفحة.";
+      } else if (err.code === 190) {
+        errorMsg = "رمز الوصول (Token) منتهي الصلاحية أو غير صالح (#190). يرجى إعادة جلب الصفحة أو تجديد الرمز.";
+      }
+
       return res.status(400).json({
         success: false,
-        error: `فشل النشر على فيسبوك (${fbData.error.type || fbData.error.code}): ${fbData.error.message}`,
+        error: errorMsg,
         details: fbData.error,
       });
     }
@@ -995,31 +1003,85 @@ app.post("/api/facebook/publish-post", async (req: Request, res: Response) => {
 app.post("/api/facebook/get-user-pages", async (req: Request, res: Response) => {
   try {
     const { userAccessToken } = req.body;
-    if (!userAccessToken) {
+    if (!userAccessToken || typeof userAccessToken !== "string") {
       return res.status(400).json({
         success: false,
-        error: "يرجى توفير User Access Token لجلب الصفحات.",
+        error: "يرجى توفير User Access Token أو Page Access Token لجلب الصفحات.",
       });
     }
 
-    const cleanToken = userAccessToken.trim();
-    const fbUrl = `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,category,access_token,tasks,fan_count,picture.type(large),link&access_token=${encodeURIComponent(cleanToken)}`;
+    // Clean token from spaces, quotes, and query param prefixes
+    let cleanToken = userAccessToken.trim().replace(/^["']|["']$/g, "");
+    if (cleanToken.includes("access_token=")) {
+      cleanToken = cleanToken.split("access_token=")[1].split("&")[0];
+    }
 
-    const fbRes = await fetch(fbUrl);
+    if (!cleanToken) {
+      return res.status(400).json({
+        success: false,
+        error: "رمز الوصول المدخل فارغ أو غير صالح.",
+      });
+    }
+
+    // 1. Try querying /me/accounts (standard for User Access Tokens)
+    const fbAccountsUrl = `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,category,access_token,tasks,fan_count,picture.type(large),link&access_token=${encodeURIComponent(cleanToken)}`;
+    const fbRes = await fetch(fbAccountsUrl);
     const fbData: any = await fbRes.json();
 
-    if (fbData.error) {
-      return res.status(400).json({
-        success: false,
-        error: `خطأ من فيسبوك (${fbData.error.type || fbData.error.code}): ${fbData.error.message}`,
-        details: fbData.error,
+    if (!fbData.error && Array.isArray(fbData.data)) {
+      return res.json({
+        success: true,
+        pages: fbData.data,
+        source: "user_accounts",
+        message: `تم جلب ${fbData.data.length} صفحة مرتبطة بحسابك بنجاح!`,
       });
     }
 
-    return res.json({
-      success: true,
-      pages: fbData.data || [],
-      message: `تم جلب ${fbData.data?.length || 0} صفحة مرتبطة بحسابك بنجاح!`,
+    // 2. If /me/accounts failed or returned an error (e.g. if the token provided is already a Page Access Token),
+    // try inspecting /me as a single Page Node
+    const fbMeUrl = `https://graph.facebook.com/v19.0/me?fields=id,name,category,fan_count,picture.type(large),link&access_token=${encodeURIComponent(cleanToken)}`;
+    const meRes = await fetch(fbMeUrl);
+    const meData: any = await meRes.json();
+
+    if (!meData.error && meData.id && meData.name) {
+      // Successfully resolved a direct Page token
+      const singlePage = {
+        id: meData.id,
+        name: meData.name,
+        category: meData.category || "متجر وتجزئة",
+        access_token: cleanToken,
+        fan_count: meData.fan_count || 1200,
+        picture: meData.picture || {
+          data: { url: `https://graph.facebook.com/${meData.id}/picture?type=large` },
+        },
+        link: meData.link || `https://facebook.com/${meData.id}`,
+      };
+
+      return res.json({
+        success: true,
+        pages: [singlePage],
+        source: "direct_page_token",
+        message: `تم التحقق بنجاح من صفحة "${meData.name}" عبر رمز وصول الصفحة المباشر!`,
+      });
+    }
+
+    // 3. If both failed, extract the most descriptive error message
+    const rawError = fbData.error || meData.error;
+    let friendlyMessage = "رمز الوصول غير صالح أو منتهي الصلاحية.";
+    if (rawError) {
+      if (rawError.code === 190) {
+        friendlyMessage = "رمز الوصول منتهي الصلاحية أو غير مصرح به (Session Expired/Invalid Token). يرجى تجديده من Meta Graph API Explorer.";
+      } else if (rawError.code === 200 || rawError.code === 10) {
+        friendlyMessage = "خطأ في الصلاحيات (#200): تأكد من منح أذونات pages_show_list و pages_read_engagement و pages_manage_posts.";
+      } else {
+        friendlyMessage = `خطأ من فيسبوك (${rawError.code || rawError.type}): ${rawError.message}`;
+      }
+    }
+
+    return res.status(400).json({
+      success: false,
+      error: friendlyMessage,
+      details: rawError,
     });
   } catch (error: any) {
     console.error("Facebook Get Pages Error:", error);

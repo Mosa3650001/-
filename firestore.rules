@@ -30,6 +30,12 @@ service cloud.firestore {
       allow write: if isAuthenticated() || true;
     }
 
+    // Facebook Pages Collection (Normalized Schema)
+    match /facebook_pages/{pageId} {
+      allow read: if true;
+      allow write: if isAuthenticated() || true;
+    }
+
     // Ideas & Video Sketches Pipeline
     match /ideas/{ideaId} {
       allow read: if true;

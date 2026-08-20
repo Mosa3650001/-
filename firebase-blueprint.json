@@ -82,6 +82,19 @@
         "status": { "type": "string" }
       },
       "required": ["id", "content", "status"]
+    },
+    "FacebookPage": {
+      "title": "FacebookPage",
+      "description": "Synced Facebook Page with token and connected store association",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "access_token": { "type": "string" },
+        "category": { "type": "string" },
+        "connected_store_id": { "type": "string" }
+      },
+      "required": ["id", "name", "access_token", "connected_store_id"]
     }
   },
   "firestore": {
@@ -92,6 +105,14 @@
     "/brands/{brandId}": {
       "schema": "Brand",
       "description": "Stores and brand configuration"
+    },
+    "/facebook_pages/{pageId}": {
+      "schema": "FacebookPage",
+      "description": "Synced Facebook Pages"
+    },
+    "/accounts/{accountId}": {
+      "schema": "FacebookPage",
+      "description": "Connected social accounts"
     },
     "/ideas/{ideaId}": {
       "schema": "ContentIdea",

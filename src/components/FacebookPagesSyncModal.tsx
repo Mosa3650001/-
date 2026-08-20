@@ -589,11 +589,11 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
           )}
 
           {/* Fallback Option: Manual User Access Token / Graph Explorer Import */}
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800">
-            <div className="flex items-center justify-between mb-2">
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300">
-                <Info className="w-4 h-4 text-slate-500" />
-                <span>خيار بديل: جلب الصفحات عبر User Access Token (من Graph Explorer)</span>
+                <Info className="w-4 h-4 text-blue-500" />
+                <span>جلب الصفحات عبر رمز الوصول (User Token أو Page Token)</span>
               </div>
               <a
                 href="https://developers.facebook.com/tools/explorer/"
@@ -611,7 +611,7 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
                 type="text"
                 value={manualUserToken}
                 onChange={(e) => setManualUserToken(e.target.value)}
-                placeholder="الصق User Access Token هنا لجلب كافة الصفحات..."
+                placeholder="الصق Access Token (يبدأ عادة بـ EAA...) لجلب الصفحات ومزامنتها فوراً..."
                 className="flex-1 font-mono text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none"
                 dir="ltr"
               />
@@ -619,13 +619,14 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
                 type="button"
                 onClick={handleFetchManualPages}
                 disabled={isFetchingManual}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 dark:bg-slate-700 hover:bg-slate-700 text-white text-xs font-bold transition flex items-center gap-1.5 shrink-0"
+                className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow-sm"
               >
                 {isFetchingManual ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                <span>استيراد الصفحات</span>
+                <span>جلب ومزامنة Firestore</span>
               </button>
             </div>
           </div>
+
 
           {/* Live Post Publishing Tester Section */}
           <div className="p-5 md:p-6 rounded-3xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-4">

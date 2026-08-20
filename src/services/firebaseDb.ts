@@ -20,13 +20,18 @@ import {
   InboxItem,
   TeamMember,
   DailyPublishGoal,
+  FacebookRawPage,
+  FacebookPageData,
 } from "../types";
+
+export type { FacebookRawPage, FacebookPageData };
 
 // Collections constants
 export const COLLECTIONS = {
   USERS: "users",
   BRANDS: "brands",
   ACCOUNTS: "accounts",
+  FACEBOOK_PAGES: "facebook_pages",
   IDEAS: "ideas",
   POSTS: "posts",
   INBOX: "inbox",
@@ -128,21 +133,12 @@ export async function seedInitialFirestoreData(
 }
 
 // 5. Unified Function to Sync Facebook Pages with Firestore Permanently
-export interface FacebookRawPage {
-  id: string;
-  name: string;
-  category?: string;
-  access_token?: string;
-  tasks?: string[];
-  fan_count?: number;
-  picture?: {
-    data?: {
-      url?: string;
-    };
-  };
-  link?: string;
-}
 
+/**
+ * Unified Function to Sync and Store Facebook Pages in Firestore and Local Cache
+ * Stores pages in the standardized format: (id, name, access_token, category, connected_store_id)
+ * to prevent data loss and ensure permanent display consistency across the dashboard.
+ */
 export async function syncFacebookPagesToFirestore(
   pages: FacebookRawPage[],
   defaultBrandId?: string,
@@ -151,96 +147,148 @@ export async function syncFacebookPagesToFirestore(
   success: boolean;
   syncedAccounts: ConnectedAccount[];
   updatedBrands: Brand[];
+  facebookPages: FacebookPageData[];
   error?: string;
 }> {
   try {
     if (!pages || pages.length === 0) {
-      return { success: false, syncedAccounts: [], updatedBrands: existingBrands, error: "لا توجد صفحات لمزامنتها" };
+      return {
+        success: false,
+        syncedAccounts: [],
+        updatedBrands: existingBrands,
+        facebookPages: [],
+        error: "لم يتم العثور على صفحات فيسبوك لمزامنتها.",
+      };
     }
 
     const syncedAccounts: ConnectedAccount[] = [];
+    const normalizedFbPages: FacebookPageData[] = [];
     const updatedBrandsMap = new Map<string, Brand>(existingBrands.map((b) => [b.id, { ...b }]));
+    const nowIso = new Date().toISOString();
 
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i];
-      const accountDocId = `fb_${page.id}`;
-      
-      // Determine the best matching brand:
-      // 1. Try to find a brand with matching or containing name
-      // 2. If single page and defaultBrandId provided, use defaultBrandId
-      // 3. Match by index or create a brand if none exists
+      const pageId = String(page.id).trim();
+      const pageName = page.name || `صفحة فيسبوك ${pageId}`;
+      const pageAccessToken = (page.access_token || "").trim();
+      const pageCategory = page.category || "متجر وتجزئة";
+      const accountDocId = `fb_${pageId}`;
+
+      // 1. Determine or match the connected store (connected_store_id / brandId)
       let matchedBrand = existingBrands.find(
         (b) =>
-          b.name.trim().toLowerCase() === page.name.trim().toLowerCase() ||
-          page.name.toLowerCase().includes(b.name.toLowerCase()) ||
-          b.name.toLowerCase().includes(page.name.toLowerCase())
+          b.name.trim().toLowerCase() === pageName.trim().toLowerCase() ||
+          pageName.toLowerCase().includes(b.name.toLowerCase()) ||
+          b.name.toLowerCase().includes(pageName.toLowerCase())
       );
 
       if (!matchedBrand && defaultBrandId && defaultBrandId !== "all") {
         matchedBrand = existingBrands.find((b) => b.id === defaultBrandId);
       }
 
-      if (!matchedBrand) {
-        // Find by index if available
-        matchedBrand = existingBrands[i % Math.max(1, existingBrands.length)];
+      if (!matchedBrand && existingBrands.length > 0) {
+        matchedBrand = existingBrands[i % existingBrands.length];
       }
 
-      let brandId = matchedBrand?.id || `brand_${page.id.slice(-6)}`;
+      let connectedStoreId = matchedBrand?.id || `brand_${pageId.slice(-6)}`;
 
-      // If no brand exists at all or a new one is needed
+      // 2. If no brand exists, create a new brand automatically
       if (!matchedBrand) {
         const newBrand: Brand = {
-          id: brandId,
-          name: page.name,
-          category: page.category || "متجر وتجزئة",
-          tone: "تفاعلية تجارية وعروض حصرية",
+          id: connectedStoreId,
+          name: pageName,
+          slug: pageName.toLowerCase().replace(/\s+/g, "-"),
+          tagline: `المتجر والفرع الرسمي لـ ${pageName}`,
+          description: `المتجر الإلكتروني وحسابات التواصل لـ ${pageName}`,
+          logo:
+            page.picture?.data?.url ||
+            `https://graph.facebook.com/${pageId}/picture?type=large` ||
+            "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=200&h=200&fit=crop",
           primaryColor: "#1877F2",
-          logo: page.picture?.data?.url || "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=200&h=200&fit=crop",
-          coverImage: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1200&h=400&fit=crop",
-          description: `المتجر والصفحة الرسمية لـ ${page.name}`,
-          connectedAccounts: ["facebook"],
-          targetAudience: "المتسوقون والعملاء في المملكة والخليج",
+          toneLabel: "تفاعلية تجارية وعروض حصرية",
+          defaultHashtags: [`#${pageName.replace(/\s+/g, "_")}`, "#عروض", "#تسوق", "#متجر"],
+          connectedPlatforms: ["facebook"],
+          pricingTier: "mid",
+          priceRangeLabel: "أسعار تنافسية وعروض مستمرة",
+          isEnabled: true,
         };
         updatedBrandsMap.set(newBrand.id, newBrand);
         await saveDocument(COLLECTIONS.BRANDS, newBrand.id, newBrand);
       } else {
-        // Ensure facebook is included in brand's connectedAccounts
-        if (!matchedBrand.connectedAccounts.includes("facebook")) {
-          matchedBrand.connectedAccounts = [...matchedBrand.connectedAccounts, "facebook"];
-          updatedBrandsMap.set(matchedBrand.id, matchedBrand);
-          await saveDocument(COLLECTIONS.BRANDS, matchedBrand.id, {
-            connectedAccounts: matchedBrand.connectedAccounts,
-          });
-        }
+        // Ensure facebook is in brand connected platforms
+        const platforms = new Set(matchedBrand.connectedPlatforms || []);
+        platforms.add("facebook");
+        matchedBrand.connectedPlatforms = Array.from(platforms);
+        updatedBrandsMap.set(matchedBrand.id, matchedBrand);
+        await saveDocument(COLLECTIONS.BRANDS, matchedBrand.id, {
+          connectedPlatforms: matchedBrand.connectedPlatforms,
+        });
       }
 
-      const accountData: ConnectedAccount = {
-        id: accountDocId,
-        brandId,
+      // 3. Construct the standardized FacebookPageData record: (id, name, access_token, category, connected_store_id)
+      const pageAvatar =
+        page.picture?.data?.url ||
+        `https://graph.facebook.com/${pageId}/picture?type=large` ||
+        "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=150&h=150&fit=crop";
+
+      const formattedRecord: FacebookPageData = {
+        // Core requested standard fields:
+        id: pageId,
+        name: pageName,
+        access_token: pageAccessToken,
+        category: pageCategory,
+        connected_store_id: connectedStoreId,
+
+        // Dashboard & Store compatibility fields:
+        brandId: connectedStoreId,
         platform: "facebook",
-        accountName: page.name,
-        handle: `@${page.name.toLowerCase().replace(/\s+/g, "_")}`,
-        avatar:
-          page.picture?.data?.url ||
-          `https://graph.facebook.com/${page.id}/picture?type=large` ||
-          "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=150&h=150&fit=crop",
-        status: "connected",
+        accountName: pageName,
+        handle: `@${pageName.toLowerCase().replace(/\s+/g, "_")}`,
+        apiToken: pageAccessToken,
+        pageId: pageId,
+        accountId: pageId,
+        avatar: pageAvatar,
         followersCount: page.fan_count || 1250,
-        apiToken: page.access_token || "",
-        pageId: page.id,
-        accountId: page.id,
-        category: page.category,
-        lastSync: new Date().toISOString(),
+        fan_count: page.fan_count || 1250,
+        tasks: page.tasks || ["ANALYZE", "ADVERTISE", "MESSAGING", "MODERATE", "CREATE_CONTENT", "MANAGE"],
+        link: page.link || `https://facebook.com/${pageId}`,
+        status: "connected",
+        lastSync: nowIso,
+        lastSyncedAt: nowIso,
+        canPublish: true,
+        canReadComments: true,
+        canDirectMessage: true,
+        updatedAt: nowIso,
       };
 
-      // Save to Firestore permanently with merge: true
-      await saveDocument(COLLECTIONS.ACCOUNTS, accountDocId, accountData);
-      syncedAccounts.push(accountData);
+      // 4. Save to Firestore permanently across both collections:
+      // (a) COLLECTIONS.ACCOUNTS (key: fb_123456)
+      await saveDocument(COLLECTIONS.ACCOUNTS, accountDocId, formattedRecord);
+
+      // (b) COLLECTIONS.FACEBOOK_PAGES (key: 123456)
+      await saveDocument(COLLECTIONS.FACEBOOK_PAGES, pageId, formattedRecord);
+
+      syncedAccounts.push(formattedRecord as unknown as ConnectedAccount);
+      normalizedFbPages.push(formattedRecord);
+    }
+
+    // 5. Local storage backup for zero-latency UI recovery
+    try {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("smartpost_facebook_pages");
+        const existingList: FacebookPageData[] = stored ? JSON.parse(stored) : [];
+        const map = new Map(existingList.map((p) => [p.id, p]));
+        normalizedFbPages.forEach((p) => map.set(p.id, p));
+        localStorage.setItem("smartpost_facebook_pages", JSON.stringify(Array.from(map.values())));
+      }
+    } catch {
+      // safe fallback
     }
 
     return {
       success: true,
       syncedAccounts,
+      facebookPages: normalizedFbPages,
       updatedBrands: Array.from(updatedBrandsMap.values()),
     };
   } catch (error: any) {
@@ -248,13 +296,16 @@ export async function syncFacebookPagesToFirestore(
     return {
       success: false,
       syncedAccounts: [],
+      facebookPages: [],
       updatedBrands: existingBrands,
-      error: error.message || "فشلت المزامنة مع Firestore",
+      error: error.message || "فشلت المزامنة مع قاعدة بيانات Firestore",
     };
   }
 }
 
-// 6. Bulk Fetch from Meta Graph API and Directly Commit to Firestore
+/**
+ * 6. Unified Full-Stack Fetch & Sync from Meta Graph API to Firestore
+ */
 export async function fetchAndSyncAllUserPagesToFirestore(
   userAccessToken: string,
   defaultBrandId?: string,
@@ -263,24 +314,40 @@ export async function fetchAndSyncAllUserPagesToFirestore(
   success: boolean;
   pagesCount: number;
   syncedAccounts: ConnectedAccount[];
+  facebookPages: FacebookPageData[];
   updatedBrands: Brand[];
   error?: string;
 }> {
   try {
-    const res = await fetch("/api/facebook/get-user-pages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userAccessToken: userAccessToken.trim() }),
-    });
-
-    const data = await res.json();
-    if (!data.success || !data.pages) {
+    const cleanToken = (userAccessToken || "").trim().replace(/^["']|["']$/g, "");
+    if (!cleanToken) {
       return {
         success: false,
         pagesCount: 0,
         syncedAccounts: [],
+        facebookPages: [],
         updatedBrands: existingBrands,
-        error: data.error || "تعذر جلب الصفحات من فيسبوك. تأكد من صحة رمز الوصول والصلاحيات.",
+        error: "يرجى إدخال رمز وصول فيسبوك (Access Token) صالح.",
+      };
+    }
+
+    const res = await fetch("/api/facebook/get-user-pages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userAccessToken: cleanToken }),
+    });
+
+    const data = await res.json();
+    if (!data.success || !data.pages || data.pages.length === 0) {
+      return {
+        success: false,
+        pagesCount: 0,
+        syncedAccounts: [],
+        facebookPages: [],
+        updatedBrands: existingBrands,
+        error:
+          data.error ||
+          "لم يتم العثور على صفحات فيسبوك مرتبطة بهذا الرمز. تأكد من تفعيل صلاحيات pages_show_list و pages_manage_posts.",
       };
     }
 
@@ -289,16 +356,20 @@ export async function fetchAndSyncAllUserPagesToFirestore(
       success: syncRes.success,
       pagesCount: data.pages.length,
       syncedAccounts: syncRes.syncedAccounts,
+      facebookPages: syncRes.facebookPages,
       updatedBrands: syncRes.updatedBrands,
       error: syncRes.error,
     };
   } catch (err: any) {
+    console.error("fetchAndSyncAllUserPagesToFirestore error:", err);
     return {
       success: false,
       pagesCount: 0,
       syncedAccounts: [],
+      facebookPages: [],
       updatedBrands: existingBrands,
-      error: err.message || "حدث خطأ غير متوقع أثناء الاتصال بالخادم",
+      error: err.message || "حدث خطأ غير متوقع أثناء الاتصال بخادم المزامنة.",
     };
   }
 }
+

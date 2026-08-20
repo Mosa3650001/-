@@ -261,18 +261,48 @@ export interface UserPermissions {
   canViewAnalytics: boolean;
 }
 
-export interface AppUser {
+export interface FacebookRawPage {
   id: string;
   name: string;
-  email: string;
-  role: UserRole;
-  roleTitleAr: string;
-  avatar?: string;
-  assignedBrandIds: string[]; // ['all'] or specific brand ids
-  createdAt: string;
-  lastActive?: string;
-  status: "active" | "inactive";
-  permissions: UserPermissions;
+  category?: string;
+  access_token?: string;
+  tasks?: string[];
+  fan_count?: number;
+  picture?: {
+    data?: {
+      url?: string;
+    };
+  };
+  link?: string;
+}
+
+export interface FacebookPageData {
+  id: string; // Facebook Page ID (e.g., "1083928172910")
+  name: string; // Facebook Page Name (e.g., "بلال كوو للأزياء")
+  access_token: string; // Permanent Page Access Token
+  category: string; // Category e.g., "متجر وتجزئة" or "Clothing Store"
+  connected_store_id: string; // Associated Store/Brand ID
+  
+  // Dashboard & Firestore compatibility fields:
+  brandId: string; // Same as connected_store_id
+  platform: "facebook";
+  accountName: string; // Same as name
+  handle: string; // @handle
+  apiToken: string; // Same as access_token
+  pageId: string; // Page ID
+  accountId: string; // Account ID
+  avatar: string;
+  followersCount: number;
+  fan_count?: number;
+  tasks?: string[];
+  link?: string;
+  status: "connected" | "expired" | "disconnected" | "syncing";
+  lastSync: string;
+  lastSyncedAt: string;
+  canPublish: boolean;
+  canReadComments: boolean;
+  canDirectMessage: boolean;
+  updatedAt?: string;
 }
 
 
