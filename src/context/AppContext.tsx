@@ -593,14 +593,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Check if post targets Facebook and we have live Facebook accounts configured
     if (post.targetPlatforms.includes("facebook")) {
-      const fbAccounts = connectedAccounts.filter(
+      let fbAccounts = connectedAccounts.filter(
         (acc) =>
           acc.platform === "facebook" &&
-          (post.brandId === "all" || post.brandId === acc.brandId || (post.targetBrandIds && post.targetBrandIds.includes(acc.brandId))) &&
+          (post.brandId === "all" || post.brandId === acc.brandId || (post.targetBrandIds && post.targetBrandIds.includes(acc.brandId)) || (acc as any).connected_store_id === post.brandId) &&
           acc.apiToken &&
-          acc.apiToken.length > 20 &&
+          acc.apiToken.length > 15 &&
           (acc.pageId || acc.accountId)
       );
+
+      // Fallback: Check cached facebook pages from localStorage
+      if (fbAccounts.length === 0) {
+        try {
+          const stored = localStorage.getItem("smartpost_facebook_pages");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+              const matched = parsed.filter(
+                (p: any) =>
+                  (post.brandId === "all" || p.connected_store_id === post.brandId || p.brandId === post.brandId) &&
+                  (p.access_token || p.apiToken)
+              );
+              if (matched.length > 0) {
+                fbAccounts = matched.map((p: any) => ({
+                  id: `fb_${p.id}`,
+                  brandId: p.connected_store_id || post.brandId,
+                  platform: "facebook" as const,
+                  accountName: p.name || p.accountName || "صفحة فيسبوك",
+                  handle: `@${(p.name || "").replace(/\s+/g, "_")}`,
+                  avatar: p.picture?.data?.url || p.avatar || "",
+                  followersCount: p.fan_count || 1000,
+                  status: "connected" as const,
+                  apiToken: p.access_token || p.apiToken,
+                  pageId: p.id || p.pageId,
+                  accountId: p.id || p.accountId,
+                  canPublish: true,
+                  canReadComments: true,
+                  canDirectMessage: true,
+                  lastSyncedAt: new Date().toISOString(),
+                }));
+              }
+            }
+          }
+        } catch {
+          // safe fallback
+        }
+      }
 
       if (fbAccounts.length > 0) {
         const fbContent = post.contentPerPlatform?.facebook;

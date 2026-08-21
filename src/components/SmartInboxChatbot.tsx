@@ -67,7 +67,9 @@ export const SmartInboxChatbot: React.FC<SmartInboxChatbotProps> = ({
     selectedInboxItem?.content || "السلام عليكم، كم سعر هذا الموديل وهل متوفر منه مقاس L وشحن سريع لجدة؟"
   );
   const [platform, setPlatform] = useState<SocialPlatform>(selectedInboxItem?.platform || "instagram");
-  const [interactionType, setInteractionType] = useState<"comment" | "dm">(selectedInboxItem?.type || "comment");
+  const [interactionType, setInteractionType] = useState<"comment" | "dm">(
+    selectedInboxItem?.type === "message" ? "dm" : "comment"
+  );
   const [productContext, setProductContext] = useState<string>(
     selectedInboxItem?.postTitle
       ? `منشور: ${selectedInboxItem.postTitle}`

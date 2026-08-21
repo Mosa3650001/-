@@ -52,7 +52,32 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
   const [appId, setAppId] = useState<string>(() => getStoredFacebookAppId());
   const [isEditingAppId, setIsEditingAppId] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [discoveredPages, setDiscoveredPages] = useState<FacebookPageItem[]>([]);
+  const [discoveredPages, setDiscoveredPages] = useState<FacebookPageItem[]>(() => {
+    try {
+      const stored = localStorage.getItem("smartpost_facebook_pages");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((p: any) => ({
+            id: p.id || p.pageId || p.accountId,
+            name: p.name || p.accountName,
+            category: p.category || "متجر وتجزئة",
+            access_token: p.access_token || p.apiToken,
+            picture: {
+              data: {
+                url: p.picture?.data?.url || p.avatar || `https://graph.facebook.com/${p.id}/picture?type=large`,
+              },
+            },
+            link: p.link || `https://facebook.com/${p.id}`,
+            fan_count: p.fan_count || p.followersCount,
+          }));
+        }
+      }
+    } catch {
+      // safe fallback
+    }
+    return [];
+  });
   const [selectedBrandForPage, setSelectedBrandForPage] = useState<Record<string, string>>({});
   const [manualUserToken, setManualUserToken] = useState<string>("");
   const [manualPageIdInput, setManualPageIdInput] = useState<string>("");
@@ -85,15 +110,55 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       initFacebookSdk(appId);
+      
+      // Auto-load connected accounts into discovered pages list
+      const existingFbAccounts = connectedAccounts.filter(
+        (a) => a.platform === "facebook" && (a.pageId || a.accountId)
+      );
+
+      if (existingFbAccounts.length > 0) {
+        setDiscoveredPages((prev) => {
+          const map = new Map<string, FacebookPageItem>();
+          prev.forEach((p) => map.set(p.id, p));
+          existingFbAccounts.forEach((acc) => {
+            const pid = acc.pageId || acc.accountId || acc.id;
+            if (pid && !map.has(pid)) {
+              map.set(pid, {
+                id: pid,
+                name: acc.accountName,
+                category: "متجر وتجزئة",
+                access_token: acc.apiToken || "",
+                picture: { data: { url: acc.avatar || `https://graph.facebook.com/${pid}/picture?type=large` } },
+                link: `https://facebook.com/${pid}`,
+                fan_count: acc.followersCount,
+              });
+            }
+          });
+          return Array.from(map.values());
+        });
+      }
+
       // Initialize brand selection defaults
       const defaultBrand = targetBrandId || brands[0]?.id || "";
       const map: Record<string, string> = {};
+      connectedAccounts
+        .filter((a) => a.platform === "facebook")
+        .forEach((a) => {
+          const pid = a.pageId || a.accountId;
+          if (pid && a.brandId) {
+            map[pid] = a.brandId;
+          }
+        });
       discoveredPages.forEach((p) => {
-        map[p.id] = defaultBrand;
+        if (!map[p.id]) map[p.id] = defaultBrand;
       });
       setSelectedBrandForPage((prev) => ({ ...map, ...prev }));
+
+      if (!testPageId && discoveredPages.length > 0) {
+        setTestPageId(discoveredPages[0].id);
+      }
     }
-  }, [isOpen, appId, targetBrandId, brands]);
+  }, [isOpen, appId, targetBrandId, brands, connectedAccounts]);
 
   if (!isOpen) return null;
 
@@ -250,7 +315,15 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
 
   const handleConnectSinglePage = async (page: FacebookPageItem) => {
     const brandId = selectedBrandForPage[page.id] || targetBrandId || brands[0]?.id;
-    await syncRawFacebookPagesToFirestore([page], brandId);
+    const targetBrand = brands.find((b) => b.id === brandId);
+    const res = await syncRawFacebookPagesToFirestore([page], brandId);
+    if (res.success) {
+      addToast({
+        type: "success",
+        title: `✅ تم ربط صفحة "${page.name}" بـ "${targetBrand?.name || "المتجر"}" بنجاح!`,
+        description: "أصبح بإمكانك الآن النشر المباشر من استوديو المنشورات إلى هذه الصفحة فوراً.",
+      });
+    }
   };
 
   const handleConnectAllPages = async () => {
@@ -261,6 +334,11 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
         const brandId = selectedBrandForPage[page.id] || targetBrandId || brands[0]?.id;
         await syncRawFacebookPagesToFirestore([page], brandId);
       }
+      addToast({
+        type: "success",
+        title: `🎉 تم ربط كافة الصفحات (${discoveredPages.length}) بالمتاجر المحددة بنجاح!`,
+        description: "كافة الحسابات الآن جاهزة ومربوطة للنشر المباشر وإدارة المحتوى.",
+      });
     } finally {
       setIsSyncingCloud(false);
     }

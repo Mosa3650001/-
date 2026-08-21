@@ -67,8 +67,15 @@ export const TeamManagementView: React.FC = () => {
     setName(member.name);
     setEmail(member.email);
     setRole(member.role);
-    setAssignedBrandIds(member.assignedBrandIds);
-    setPermissions(member.permissions);
+    setAssignedBrandIds(member.assignedBrandIds || []);
+    setPermissions({
+      canCreatePosts: Boolean(member.permissions?.canCreatePosts),
+      canPublishDirectly: Boolean(member.permissions?.canPublishDirectly),
+      canSchedulePosts: Boolean(member.permissions?.canSchedulePosts ?? member.permissions?.canEditSchedule),
+      canReplyInbox: Boolean(member.permissions?.canReplyInbox),
+      canManageStoreSettings: Boolean(member.permissions?.canManageStoreSettings ?? member.permissions?.canManageBrands),
+      canUseAiTools: Boolean(member.permissions?.canUseAiTools ?? true),
+    });
     setEditingMember(member);
     setIsAddModalOpen(true);
   };

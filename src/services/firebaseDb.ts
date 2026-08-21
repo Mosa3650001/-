@@ -265,23 +265,23 @@ export async function syncFacebookPagesToFirestore(
       const accountDocId = `fb_${pageId}`;
 
       // 1. Determine or match the connected store (connected_store_id / brandId)
-      let matchedBrand = safeExistingBrands.find((b) => {
-        if (!b) return false;
-        if (defaultBrandId && defaultBrandId !== "all" && b.id === defaultBrandId) {
-          return true;
-        }
-        const bName = String(b.name || "").trim().toLowerCase();
-        const pName = pageName.toLowerCase();
-        if (bName && pName) {
-          return bName === pName || pName.includes(bName) || bName.includes(pName);
-        }
-        return false;
-      });
-
-      if (!matchedBrand && defaultBrandId && defaultBrandId !== "all") {
+      // Prioritize explicit store selection if defaultBrandId is provided and valid
+      let matchedBrand: Brand | undefined = undefined;
+      if (defaultBrandId && defaultBrandId !== "all") {
         matchedBrand = safeExistingBrands.find((b) => b && b.id === defaultBrandId);
       }
 
+      // If no explicit match, try name similarity
+      if (!matchedBrand) {
+        matchedBrand = safeExistingBrands.find((b) => {
+          if (!b || !b.name) return false;
+          const bName = String(b.name).trim().toLowerCase();
+          const pName = pageName.toLowerCase();
+          return bName === pName || pName.includes(bName) || bName.includes(pName);
+        });
+      }
+
+      // Fallback to first existing brand if available
       if (!matchedBrand && safeExistingBrands.length > 0) {
         matchedBrand = safeExistingBrands[0];
       }
@@ -361,10 +361,21 @@ export async function syncFacebookPagesToFirestore(
       // (a) COLLECTIONS.ACCOUNTS (key: fb_123456)
       await saveDocument(COLLECTIONS.ACCOUNTS, accountDocId, formattedRecord);
 
-      // (b) COLLECTIONS.FACEBOOK_PAGES (key: 123456)
+      // (b) Also link/update account for the specific store
+      const brandSpecificAccId = `acc-${connectedStoreId}-facebook`;
+      await saveDocument(COLLECTIONS.ACCOUNTS, brandSpecificAccId, {
+        ...formattedRecord,
+        id: brandSpecificAccId,
+      });
+
+      // (c) COLLECTIONS.FACEBOOK_PAGES (key: 123456)
       await saveDocument(COLLECTIONS.FACEBOOK_PAGES, pageId, formattedRecord);
 
       syncedAccounts.push(formattedRecord as unknown as ConnectedAccount);
+      syncedAccounts.push({
+        ...formattedRecord,
+        id: brandSpecificAccId,
+      } as unknown as ConnectedAccount);
       normalizedFbPages.push(formattedRecord);
     }
 

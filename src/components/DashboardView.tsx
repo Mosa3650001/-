@@ -327,7 +327,7 @@ export const DashboardView: React.FC = () => {
                             </span>
                             <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 font-mono">
                               <Clock className="w-3 h-3 text-amber-500" />
-                              {new Date(post.scheduledTime).toLocaleString("ar-SA", {
+                              {new Date(post.scheduledAt || Date.now()).toLocaleString("ar-SA", {
                                 weekday: "short",
                                 hour: "2-digit",
                                 minute: "2-digit",
@@ -337,7 +337,9 @@ export const DashboardView: React.FC = () => {
                             </span>
                           </div>
                           <h4 className="text-sm font-bold text-slate-900 dark:text-white mt-1 line-clamp-1">{post.title}</h4>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">{post.content}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
+                            {post.contentPerPlatform?.facebook?.caption || post.contentPerPlatform?.instagram?.caption || post.title}
+                          </p>
                         </div>
                       </div>
 
@@ -561,7 +563,7 @@ export const DashboardView: React.FC = () => {
                     className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-xs"
                   >
                     <div className="flex items-center justify-between font-bold text-slate-900 dark:text-slate-200 mb-1">
-                      <span>{item.authorName}</span>
+                      <span>{item.senderName || item.senderHandle || "عميل"}</span>
                       <span className="text-[10px] text-slate-500 dark:text-slate-400 capitalize font-normal">{item.platform}</span>
                     </div>
                     <p className="text-slate-600 dark:text-slate-300 line-clamp-1">{item.content}</p>

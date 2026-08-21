@@ -383,14 +383,52 @@ export const PostStudio: React.FC = () => {
 
     // If instant publish and targeting Facebook, check if connected accounts have live tokens
     if (!asDraft && publishMode === "instant" && targetPlatforms.includes("facebook")) {
-      const fbAccounts = connectedAccounts.filter(
+      let fbAccounts = connectedAccounts.filter(
         (acc) =>
           acc.platform === "facebook" &&
-          selectedBrandIds.includes(acc.brandId) &&
+          (selectedBrandIds.includes(acc.brandId) || (acc as any).connected_store_id && selectedBrandIds.includes((acc as any).connected_store_id)) &&
           acc.apiToken &&
-          acc.apiToken.length > 20 &&
+          acc.apiToken.length > 15 &&
           (acc.pageId || acc.accountId)
       );
+
+      // Fallback: lookup from local cached pages if not in state yet
+      if (fbAccounts.length === 0) {
+        try {
+          const storedPages = localStorage.getItem("smartpost_facebook_pages");
+          if (storedPages) {
+            const parsedPages = JSON.parse(storedPages);
+            if (Array.isArray(parsedPages)) {
+              const matchedFromStorage = parsedPages.filter(
+                (p: any) =>
+                  (selectedBrandIds.includes(p.connected_store_id) || selectedBrandIds.includes(p.brandId) || selectedBrandIds.length === 0) &&
+                  (p.access_token || p.apiToken)
+              );
+              if (matchedFromStorage.length > 0) {
+                fbAccounts = matchedFromStorage.map((p: any) => ({
+                  id: `fb_${p.id}`,
+                  brandId: p.connected_store_id || selectedBrandIds[0],
+                  platform: "facebook" as const,
+                  accountName: p.name || p.accountName || "صفحة فيسبوك",
+                  handle: `@${(p.name || "").replace(/\s+/g, "_")}`,
+                  avatar: p.picture?.data?.url || p.avatar || "",
+                  followersCount: p.fan_count || 1000,
+                  status: "connected" as const,
+                  apiToken: p.access_token || p.apiToken,
+                  pageId: p.id || p.pageId,
+                  accountId: p.id || p.accountId,
+                  canPublish: true,
+                  canReadComments: true,
+                  canDirectMessage: true,
+                  lastSyncedAt: new Date().toISOString(),
+                }));
+              }
+            }
+          }
+        } catch {
+          // safe fallback
+        }
+      }
 
       if (fbAccounts.length > 0) {
         const fbContent = contentPerPlatform.facebook || platformContents.facebook;
@@ -427,6 +465,12 @@ export const PostStudio: React.FC = () => {
             console.error("Facebook live publish error:", e);
           }
         }
+      } else {
+        addToast({
+          type: "info",
+          title: "تنبيه ربط فيسبوك",
+          description: "تم حفظ المنشور؛ ولتفعيل النشر المباشر لفيسبوك اضغط زر 'ربط وتجربة صفحات فيسبوك' بالأعلى.",
+        });
       }
     }
 

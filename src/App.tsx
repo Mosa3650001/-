@@ -15,6 +15,7 @@ import { AboutUsView } from "./components/AboutUsView";
 import { PrivacyPolicyView } from "./components/PrivacyPolicyView";
 import { DataDeletionView } from "./components/DataDeletionView";
 import { Footer } from "./components/Footer";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import {
   LayoutDashboard,
   Lightbulb,
@@ -40,17 +41,19 @@ const MainLayout: React.FC = () => {
       <div className="flex-1 flex flex-col">
         <main className="flex-1 p-3 sm:p-5 md:p-6 pb-20 md:pb-8 bg-slate-100 dark:bg-[#070b14] transition-colors">
           <div className="max-w-7xl mx-auto w-full">
-            {activeTab === "dashboard" && <DashboardView />}
-            {activeTab === "ideas" && <IdeaLabView />}
-            {activeTab === "studio" && <PostStudio />}
-            {activeTab === "calendar" && <CalendarView />}
-            {activeTab === "inbox" && <InboxView />}
-            {activeTab === "analytics" && <AnalyticsView />}
-            {activeTab === "team" && <TeamManagementView />}
-            {activeTab === "stores" && <StoreSettingsView />}
-            {activeTab === "about" && <AboutUsView onNavigateTab={setActiveTab} />}
-            {activeTab === "privacy" && <PrivacyPolicyView />}
-            {activeTab === "data_deletion" && <DataDeletionView />}
+            <ErrorBoundary>
+              {activeTab === "dashboard" && <DashboardView />}
+              {activeTab === "ideas" && <IdeaLabView />}
+              {activeTab === "studio" && <PostStudio />}
+              {activeTab === "calendar" && <CalendarView />}
+              {activeTab === "inbox" && <InboxView />}
+              {activeTab === "analytics" && <AnalyticsView />}
+              {activeTab === "team" && <TeamManagementView />}
+              {activeTab === "stores" && <StoreSettingsView />}
+              {activeTab === "about" && <AboutUsView onNavigateTab={setActiveTab} />}
+              {activeTab === "privacy" && <PrivacyPolicyView />}
+              {activeTab === "data_deletion" && <DataDeletionView />}
+            </ErrorBoundary>
           </div>
         </main>
 

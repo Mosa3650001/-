@@ -147,7 +147,7 @@ export const IdeaLabView: React.FC = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           brandName: targetBrand.name,
-          brandTone: targetBrand.voiceTone,
+          brandTone: targetBrand.toneLabel || "تفاعلية تجارية وعروض حصرية",
           contentType: genContentType,
           themeOrGoal: genTheme,
           keywordOrProduct: genKeyword,
