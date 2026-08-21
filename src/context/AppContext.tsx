@@ -31,6 +31,7 @@ import {
   seedInitialFirestoreData,
   syncFacebookPagesToFirestore,
   fetchAndSyncAllUserPagesToFirestore,
+  mergeRemoteAndLocal,
   FacebookRawPage,
   COLLECTIONS,
 } from "../services/firebaseDb";
@@ -222,52 +223,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dailyGoals
     );
 
-    // Listen to real-time updates from cloud Firestore
+    // Listen to real-time updates from cloud Firestore with Smart Merge
     const unsubBrands = subscribeToCollection<Brand>(COLLECTIONS.BRANDS, (data) => {
       if (data && data.length > 0) {
-        setBrands(data);
+        setBrands((currentLocal) => {
+          const merged = mergeRemoteAndLocal<Brand>(data, currentLocal);
+          // If Firestore has only user-created brands or matches, prioritize remote
+          return merged;
+        });
         setIsCloudSynced(true);
       }
     });
 
     const unsubAccounts = subscribeToCollection<ConnectedAccount>(COLLECTIONS.ACCOUNTS, (data) => {
       if (data && data.length > 0) {
-        setConnectedAccounts(data);
+        setConnectedAccounts((currentLocal) => {
+          return mergeRemoteAndLocal<ConnectedAccount>(data, currentLocal);
+        });
         setIsCloudSynced(true);
       }
     });
 
     const unsubIdeas = subscribeToCollection<ContentIdea>(COLLECTIONS.IDEAS, (data) => {
       if (data && data.length > 0) {
-        setIdeas(data);
+        setIdeas((currentLocal) => mergeRemoteAndLocal<ContentIdea>(data, currentLocal));
         setIsCloudSynced(true);
       }
     });
 
     const unsubPosts = subscribeToCollection<Post>(COLLECTIONS.POSTS, (data) => {
       if (data && data.length > 0) {
-        setPosts(data);
+        setPosts((currentLocal) => mergeRemoteAndLocal<Post>(data, currentLocal));
         setIsCloudSynced(true);
       }
     });
 
     const unsubInbox = subscribeToCollection<InboxItem>(COLLECTIONS.INBOX, (data) => {
       if (data && data.length > 0) {
-        setInboxItems(data);
+        setInboxItems((currentLocal) => mergeRemoteAndLocal<InboxItem>(data, currentLocal));
         setIsCloudSynced(true);
       }
     });
 
     const unsubTeam = subscribeToCollection<TeamMember>(COLLECTIONS.USERS, (data) => {
       if (data && data.length > 0) {
-        setTeamMembers(data);
+        setTeamMembers((currentLocal) => mergeRemoteAndLocal<TeamMember>(data, currentLocal));
         setIsCloudSynced(true);
       }
     });
 
     const unsubGoals = subscribeToCollection<DailyPublishGoal>(COLLECTIONS.GOALS, (data) => {
       if (data && data.length > 0) {
-        setDailyGoals(data);
+        setDailyGoals((currentLocal) => mergeRemoteAndLocal<DailyPublishGoal>(data, currentLocal));
         setIsCloudSynced(true);
       }
     });
@@ -714,9 +721,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...brandData,
       id,
     };
-    setBrands((prev) => [...prev, newBrand]);
-    saveDocument(COLLECTIONS.BRANDS, id, newBrand);
-
+    
     // Auto-create initial connected accounts placeholders
     const newAccounts: ConnectedAccount[] = brandData.connectedPlatforms.map((platform) => ({
       id: `acc-${id}-${platform}`,
@@ -733,10 +738,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       canDirectMessage: true,
     }));
 
-    setConnectedAccounts((prev) => [...prev, ...newAccounts]);
+    // Synchronously write to LocalStorage first to guarantee zero data-loss on instant page refresh
+    setBrands((prev) => {
+      const updated = [...prev, newBrand];
+      try {
+        localStorage.setItem(STORAGE_KEYS.BRANDS, JSON.stringify(updated));
+      } catch (e) {
+        // ignore
+      }
+      return updated;
+    });
+
+    setConnectedAccounts((prev) => {
+      const updated = [...prev, ...newAccounts];
+      try {
+        localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updated));
+      } catch (e) {
+        // ignore
+      }
+      return updated;
+    });
+
+    // Asynchronously commit to Firestore Cloud DB
+    saveDocument(COLLECTIONS.BRANDS, id, newBrand).then((saved) => {
+      if (saved) {
+        setIsCloudSynced(true);
+      }
+    });
+
     for (const acc of newAccounts) {
       saveDocument(COLLECTIONS.ACCOUNTS, acc.id, acc);
     }
+
     addToast({
       type: "success",
       title: `تم إنشاء متجر ومزامنته سحابياً: ${newBrand.name}`,

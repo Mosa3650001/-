@@ -71,23 +71,44 @@ export async function saveDocument<T extends Record<string, any> = Record<string
   collectionName: string,
   docId: string,
   data: Partial<T> | Record<string, any>
-): Promise<void> {
+): Promise<boolean> {
   try {
     const docRef = doc(db, collectionName, docId);
     await setDoc(docRef, { ...data, updatedAt: new Date().toISOString() }, { merge: true });
+    return true;
   } catch (error) {
     console.warn(`Firestore save error on ${collectionName}/${docId}:`, error);
+    return false;
   }
 }
 
 // 3. Generic Delete Document
-export async function deleteDocument(collectionName: string, docId: string): Promise<void> {
+export async function deleteDocument(collectionName: string, docId: string): Promise<boolean> {
   try {
     const docRef = doc(db, collectionName, docId);
     await deleteDoc(docRef);
+    return true;
   } catch (error) {
     console.warn(`Firestore delete error on ${collectionName}/${docId}:`, error);
+    return false;
   }
+}
+
+// 4. Safe Realtime Sync & Merge Helper
+export function mergeRemoteAndLocal<T extends { id: string }>(remoteList: T[], localList: T[]): T[] {
+  if (!remoteList || remoteList.length === 0) return localList;
+  const mergedMap = new Map<string, T>();
+  // 1. Add all remote docs first
+  remoteList.forEach((item) => {
+    if (item && item.id) mergedMap.set(item.id, item);
+  });
+  // 2. Add local items if they aren't in remote yet (preventing accidental deletion before cloud sync confirms)
+  localList.forEach((item) => {
+    if (item && item.id && !mergedMap.has(item.id)) {
+      mergedMap.set(item.id, item);
+    }
+  });
+  return Array.from(mergedMap.values());
 }
 
 // 4. Initial Seed Function to copy initial data to cloud if collection is empty
