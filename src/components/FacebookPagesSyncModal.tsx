@@ -55,6 +55,12 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
   const [discoveredPages, setDiscoveredPages] = useState<FacebookPageItem[]>([]);
   const [selectedBrandForPage, setSelectedBrandForPage] = useState<Record<string, string>>({});
   const [manualUserToken, setManualUserToken] = useState<string>("");
+  const [manualPageIdInput, setManualPageIdInput] = useState<string>("");
+  const [manualPageNameInput, setManualPageNameInput] = useState<string>("");
+  const [manualPageTokenInput, setManualPageTokenInput] = useState<string>("");
+  const [manualPageCategoryInput, setManualPageCategoryInput] = useState<string>("متجر وتجزئة");
+  const [isManualAddingPage, setIsManualAddingPage] = useState<boolean>(false);
+  const [showManualAddDirect, setShowManualAddDirect] = useState<boolean>(false);
   const [isFetchingManual, setIsFetchingManual] = useState<boolean>(false);
   const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
   const [showPermissionGuide, setShowPermissionGuide] = useState<boolean>(false);
@@ -188,6 +194,57 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
       addToast({ type: "error", title: "خطأ بالاتصال", description: e.message });
     } finally {
       setIsFetchingManual(false);
+    }
+  };
+
+  const handleDirectAddSinglePage = async () => {
+    const pageId = manualPageIdInput.trim();
+    const pageName = manualPageNameInput.trim() || `صفحة فيسبوك ${pageId}`;
+    const pageToken = manualPageTokenInput.trim();
+
+    if (!pageId) {
+      addToast({ type: "warning", title: "يرجى إدخال معرف الصفحة (Page ID)" });
+      return;
+    }
+    if (!pageToken) {
+      addToast({ type: "warning", title: "يرجى إدخال رمز وصول الصفحة (Page Access Token)" });
+      return;
+    }
+
+    setIsManualAddingPage(true);
+    try {
+      const singlePage: FacebookPageItem = {
+        id: pageId,
+        name: pageName,
+        category: manualPageCategoryInput.trim() || "متجر وتجزئة",
+        access_token: pageToken,
+        picture: {
+          data: {
+            url: `https://graph.facebook.com/${pageId}/picture?type=large`,
+          },
+        },
+        link: `https://facebook.com/${pageId}`,
+      };
+
+      const selectedBrand = targetBrandId || brands[0]?.id;
+      const res = await syncRawFacebookPagesToFirestore([singlePage], selectedBrand);
+
+      if (res.success) {
+        setDiscoveredPages((prev) => {
+          const map = new Map(prev.map((p) => [p.id, p]));
+          map.set(singlePage.id, singlePage);
+          return Array.from(map.values());
+        });
+        setTestPageId(singlePage.id);
+        setManualPageIdInput("");
+        setManualPageNameInput("");
+        setManualPageTokenInput("");
+        setShowManualAddDirect(false);
+      }
+    } catch (err: any) {
+      addToast({ type: "error", title: "فشل الحفظ المباشر", description: err.message });
+    } finally {
+      setIsManualAddingPage(false);
     }
   };
 
@@ -595,15 +652,25 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
                 <Info className="w-4 h-4 text-blue-500" />
                 <span>جلب الصفحات عبر رمز الوصول (User Token أو Page Token)</span>
               </div>
-              <a
-                href="https://developers.facebook.com/tools/explorer/"
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-              >
-                <span>فتح Graph API Explorer</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowManualAddDirect(!showManualAddDirect)}
+                  className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{showManualAddDirect ? "إخفاء الإضافة اليدوية" : "إضافة صفحة يدوياً مباشرة"}</span>
+                </button>
+                <a
+                  href="https://developers.facebook.com/tools/explorer/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                >
+                  <span>فتح Graph API Explorer</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
@@ -625,6 +692,84 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
                 <span>جلب ومزامنة Firestore</span>
               </button>
             </div>
+
+            {/* Direct Page Input Form (When User already has Page ID + Page Token) */}
+            {showManualAddDirect && (
+              <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 mt-2 space-y-3 animate-in fade-in">
+                <div className="flex items-center gap-2 text-xs font-black text-slate-900 dark:text-white">
+                  <Key className="w-4 h-4 text-emerald-500" />
+                  <span>إدخال بيانات الصفحة وحفظها مباشرة في Firestore:</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                      معرف الصفحة (Page ID):
+                    </label>
+                    <input
+                      type="text"
+                      value={manualPageIdInput}
+                      onChange={(e) => setManualPageIdInput(e.target.value)}
+                      placeholder="مثال: 1083928172910"
+                      className="w-full font-mono text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                      dir="ltr"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                      اسم الصفحة:
+                    </label>
+                    <input
+                      type="text"
+                      value={manualPageNameInput}
+                      onChange={(e) => setManualPageNameInput(e.target.value)}
+                      placeholder="مثال: بلال كوو للأزياء"
+                      className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                      تصنيف الصفحة:
+                    </label>
+                    <input
+                      type="text"
+                      value={manualPageCategoryInput}
+                      onChange={(e) => setManualPageCategoryInput(e.target.value)}
+                      placeholder="متجر وتجزئة"
+                      className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                    رمز وصول الصفحة الدائم (Page Access Token):
+                  </label>
+                  <input
+                    type="text"
+                    value={manualPageTokenInput}
+                    onChange={(e) => setManualPageTokenInput(e.target.value)}
+                    placeholder="EAA..."
+                    className="w-full font-mono text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={handleDirectAddSinglePage}
+                    disabled={isManualAddingPage}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                  >
+                    {isManualAddingPage ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                    <span>حفظ الصفحة وربطها سحابياً بالمتجر</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
 
