@@ -249,9 +249,7 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
   };
 
   const handleConnectSinglePage = async (page: FacebookPageItem) => {
-    const brandId = selectedBrandForPage[page.id] || brands[0]?.id;
-    if (!brandId) return;
-
+    const brandId = selectedBrandForPage[page.id] || targetBrandId || brands[0]?.id;
     await syncRawFacebookPagesToFirestore([page], brandId);
   };
 
@@ -259,7 +257,10 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
     if (discoveredPages.length === 0) return;
     setIsSyncingCloud(true);
     try {
-      await syncRawFacebookPagesToFirestore(discoveredPages, targetBrandId || brands[0]?.id);
+      for (const page of discoveredPages) {
+        const brandId = selectedBrandForPage[page.id] || targetBrandId || brands[0]?.id;
+        await syncRawFacebookPagesToFirestore([page], brandId);
+      }
     } finally {
       setIsSyncingCloud(false);
     }

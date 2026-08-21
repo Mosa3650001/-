@@ -176,39 +176,50 @@ export async function syncFacebookPagesToFirestore(
       return {
         success: false,
         syncedAccounts: [],
-        updatedBrands: existingBrands,
+        updatedBrands: existingBrands || [],
         facebookPages: [],
         error: "لم يتم العثور على صفحات فيسبوك لمزامنتها.",
       };
     }
 
+    const safeExistingBrands = Array.isArray(existingBrands) ? existingBrands.filter(Boolean) : [];
     const syncedAccounts: ConnectedAccount[] = [];
     const normalizedFbPages: FacebookPageData[] = [];
-    const updatedBrandsMap = new Map<string, Brand>(existingBrands.map((b) => [b.id, { ...b }]));
+    const updatedBrandsMap = new Map<string, Brand>(safeExistingBrands.map((b) => [b.id, { ...b }]));
     const nowIso = new Date().toISOString();
 
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i];
-      const pageId = String(page.id).trim();
-      const pageName = page.name || `صفحة فيسبوك ${pageId}`;
-      const pageAccessToken = (page.access_token || "").trim();
-      const pageCategory = page.category || "متجر وتجزئة";
+      if (!page) continue;
+
+      const pageId = String(page.id || "").trim();
+      if (!pageId) continue;
+
+      const pageName = String(page.name || `صفحة فيسبوك ${pageId}`).trim();
+      const pageAccessToken = String(page.access_token || "").trim();
+      const pageCategory = String(page.category || "متجر وتجزئة").trim();
       const accountDocId = `fb_${pageId}`;
 
       // 1. Determine or match the connected store (connected_store_id / brandId)
-      let matchedBrand = existingBrands.find(
-        (b) =>
-          b.name.trim().toLowerCase() === pageName.trim().toLowerCase() ||
-          pageName.toLowerCase().includes(b.name.toLowerCase()) ||
-          b.name.toLowerCase().includes(pageName.toLowerCase())
-      );
+      let matchedBrand = safeExistingBrands.find((b) => {
+        if (!b) return false;
+        if (defaultBrandId && defaultBrandId !== "all" && b.id === defaultBrandId) {
+          return true;
+        }
+        const bName = String(b.name || "").trim().toLowerCase();
+        const pName = pageName.toLowerCase();
+        if (bName && pName) {
+          return bName === pName || pName.includes(bName) || bName.includes(pName);
+        }
+        return false;
+      });
 
       if (!matchedBrand && defaultBrandId && defaultBrandId !== "all") {
-        matchedBrand = existingBrands.find((b) => b.id === defaultBrandId);
+        matchedBrand = safeExistingBrands.find((b) => b && b.id === defaultBrandId);
       }
 
-      if (!matchedBrand && existingBrands.length > 0) {
-        matchedBrand = existingBrands[i % existingBrands.length];
+      if (!matchedBrand && safeExistingBrands.length > 0) {
+        matchedBrand = safeExistingBrands[0];
       }
 
       let connectedStoreId = matchedBrand?.id || `brand_${pageId.slice(-6)}`;
@@ -318,8 +329,8 @@ export async function syncFacebookPagesToFirestore(
       success: false,
       syncedAccounts: [],
       facebookPages: [],
-      updatedBrands: existingBrands,
-      error: error.message || "فشلت المزامنة مع قاعدة بيانات Firestore",
+      updatedBrands: existingBrands || [],
+      error: error?.message || "فشلت المزامنة مع قاعدة بيانات Firestore",
     };
   }
 }
