@@ -602,22 +602,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           (acc.pageId || acc.accountId)
       );
 
-      // Fallback: Check cached facebook pages from localStorage
+      // Fallback 1: Any connected Facebook account in state with a valid token
+      if (fbAccounts.length === 0) {
+        fbAccounts = connectedAccounts.filter(
+          (acc) =>
+            acc.platform === "facebook" &&
+            acc.apiToken &&
+            acc.apiToken.length > 15 &&
+            (acc.pageId || acc.accountId)
+        );
+      }
+
+      // Fallback 2: Check cached facebook pages from localStorage
       if (fbAccounts.length === 0) {
         try {
           const stored = localStorage.getItem("smartpost_facebook_pages");
           if (stored) {
             const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed)) {
-              const matched = parsed.filter(
-                (p: any) =>
-                  (post.brandId === "all" || p.connected_store_id === post.brandId || p.brandId === post.brandId) &&
-                  (p.access_token || p.apiToken)
-              );
-              if (matched.length > 0) {
-                fbAccounts = matched.map((p: any) => ({
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const validPages = parsed.filter((p: any) => p.access_token || p.apiToken);
+              if (validPages.length > 0) {
+                fbAccounts = validPages.map((p: any) => ({
                   id: `fb_${p.id}`,
-                  brandId: p.connected_store_id || post.brandId,
+                  brandId: p.connected_store_id || post.brandId || "brand-default",
                   platform: "facebook" as const,
                   accountName: p.name || p.accountName || "صفحة فيسبوك",
                   handle: `@${(p.name || "").replace(/\s+/g, "_")}`,
@@ -676,6 +683,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             console.error("Facebook live publish error in publishPostNow:", e);
           }
         }
+      } else {
+        addToast({
+          type: "info",
+          title: "📌 تم تحديث حالة المنشور إلى 'منشور'",
+          description: "لربط صفحة فيسبوك حقيقية والنشر المباشر عليها، يرجى فتح نافذة 'مزامنة صفحات فيسبوك'.",
+        });
       }
     }
 

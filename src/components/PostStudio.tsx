@@ -20,11 +20,13 @@ import {
   Plus,
   Download,
   AlertCircle,
+  Share2,
+  Play,
+  Facebook,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { SocialPlatform, PostFormat, CatalogProduct } from "../types";
 import { FacebookPagesSyncModal } from "./FacebookPagesSyncModal";
-import { Facebook } from "lucide-react";
 
 // Common clothing color presets
 const COLOR_PRESETS = [
@@ -382,7 +384,7 @@ export const PostStudio: React.FC = () => {
     const status = asDraft ? "draft" : publishMode === "instant" ? "published" : "scheduled";
 
     // If instant publish and targeting Facebook, check if connected accounts have live tokens
-    if (!asDraft && publishMode === "instant" && targetPlatforms.includes("facebook")) {
+    if (!asDraft && (publishMode === "instant" || publishMode === "schedule") && targetPlatforms.includes("facebook")) {
       let fbAccounts = connectedAccounts.filter(
         (acc) =>
           acc.platform === "facebook" &&
@@ -392,20 +394,27 @@ export const PostStudio: React.FC = () => {
           (acc.pageId || acc.accountId)
       );
 
-      // Fallback: lookup from local cached pages if not in state yet
+      // Fallback 1: Lookup ANY connected Facebook account with a valid token
+      if (fbAccounts.length === 0) {
+        fbAccounts = connectedAccounts.filter(
+          (acc) =>
+            acc.platform === "facebook" &&
+            acc.apiToken &&
+            acc.apiToken.length > 15 &&
+            (acc.pageId || acc.accountId)
+        );
+      }
+
+      // Fallback 2: lookup from local cached pages if not in state yet
       if (fbAccounts.length === 0) {
         try {
           const storedPages = localStorage.getItem("smartpost_facebook_pages");
           if (storedPages) {
             const parsedPages = JSON.parse(storedPages);
-            if (Array.isArray(parsedPages)) {
-              const matchedFromStorage = parsedPages.filter(
-                (p: any) =>
-                  (selectedBrandIds.includes(p.connected_store_id) || selectedBrandIds.includes(p.brandId) || selectedBrandIds.length === 0) &&
-                  (p.access_token || p.apiToken)
-              );
-              if (matchedFromStorage.length > 0) {
-                fbAccounts = matchedFromStorage.map((p: any) => ({
+            if (Array.isArray(parsedPages) && parsedPages.length > 0) {
+              const validStoragePages = parsedPages.filter((p: any) => p.access_token || p.apiToken);
+              if (validStoragePages.length > 0) {
+                fbAccounts = validStoragePages.map((p: any) => ({
                   id: `fb_${p.id}`,
                   brandId: p.connected_store_id || selectedBrandIds[0],
                   platform: "facebook" as const,
@@ -430,7 +439,7 @@ export const PostStudio: React.FC = () => {
         }
       }
 
-      if (fbAccounts.length > 0) {
+      if (publishMode === "instant" && fbAccounts.length > 0) {
         const fbContent = contentPerPlatform.facebook || platformContents.facebook;
         const fullMessage = `${fbContent.hook ? fbContent.hook + "\n\n" : ""}${fbContent.caption}\n\n${(fbContent.hashtags || []).join(" ")}\n\n${fbContent.callToAction || ""}`;
 
@@ -465,7 +474,7 @@ export const PostStudio: React.FC = () => {
             console.error("Facebook live publish error:", e);
           }
         }
-      } else {
+      } else if (publishMode === "instant" && fbAccounts.length === 0) {
         addToast({
           type: "info",
           title: "تنبيه ربط فيسبوك",
@@ -605,6 +614,104 @@ export const PostStudio: React.FC = () => {
                 );
               })}
             </div>
+          </div>
+
+          {/* 1.5 Target Platforms Selector & Live Facebook Status Banner */}
+          <div className="p-5 rounded-3xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Share2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <span>المنصات المستهدفة بالنشر:</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsFbSyncModalOpen(true)}
+                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+              >
+                <Facebook className="w-3.5 h-3.5" />
+                <span>إدارة صفحات فيسبوك</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {[
+                { id: "facebook", label: "فيسبوك (Facebook)", icon: Facebook, color: "#1877F2" },
+                { id: "instagram", label: "إنستغرام (Instagram)", icon: Sparkles, color: "#E4405F" },
+                { id: "tiktok", label: "تيك توك (TikTok)", icon: Play, color: "#000000" },
+                { id: "whatsapp", label: "واتساب (WhatsApp)", icon: MessageCircle, color: "#25D366" },
+              ].map((plat) => {
+                const isSelected = targetPlatforms.includes(plat.id as SocialPlatform);
+                const PlatIcon = plat.icon;
+                return (
+                  <button
+                    key={plat.id}
+                    type="button"
+                    onClick={() => {
+                      if (isSelected) {
+                        if (targetPlatforms.length === 1) {
+                          addToast({ type: "warning", title: "يجب اختيار منصة واحدة على الأقل" });
+                          return;
+                        }
+                        setTargetPlatforms(targetPlatforms.filter((p) => p !== plat.id));
+                      } else {
+                        setTargetPlatforms([...targetPlatforms, plat.id as SocialPlatform]);
+                      }
+                    }}
+                    className={`p-3 rounded-2xl border text-right transition flex items-center justify-between ${
+                      isSelected
+                        ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-500 font-bold shadow-xs text-slate-900 dark:text-white"
+                        : "bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 opacity-60"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <PlatIcon className="w-4 h-4" style={{ color: isSelected ? plat.color : undefined }} />
+                      <span className="text-xs">{plat.label}</span>
+                    </div>
+                    {isSelected && <Check className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            {targetPlatforms.includes("facebook") && (
+              <div className="p-3.5 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                    <Facebook className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <span>جاهز للنشر الحقيقي على Facebook Graph API</span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    </div>
+                    <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                      سيتم إرسال المنشور بالصورة والنص مباشرة إلى صفحتك وتوليد معرف المنشور الفوري.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPublishMode("instant");
+                      handleSubmitPost(false);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow transition flex items-center gap-1 active:scale-95"
+                  >
+                    <Send className="w-3 h-3" />
+                    <span>نشر فوري لفيسبوك 🚀</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsFbSyncModalOpen(true)}
+                    className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 font-bold text-xs hover:bg-blue-50 dark:hover:bg-slate-700 transition"
+                  >
+                    اختبار الصفحة
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 2. Clothes & Media Selection */}
