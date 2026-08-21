@@ -95,17 +95,81 @@ export async function deleteDocument(collectionName: string, docId: string): Pro
 }
 
 // 4. Safe Realtime Sync & Merge Helper
+export function sanitizeBrand(raw: any): Brand | null {
+  if (!raw || typeof raw !== "object" || !raw.id) return null;
+
+  const rawName = typeof raw.name === "string" ? raw.name.trim() : "";
+  // If it's a completely empty corrupted stub with no name, description or logo, skip it
+  if (!rawName && !raw.tagline && !raw.description && !raw.logo) {
+    return null;
+  }
+
+  const name = rawName || `متجر ${String(raw.id).slice(-4)}`;
+  const defaultHashtags = Array.isArray(raw.defaultHashtags)
+    ? raw.defaultHashtags.filter(Boolean)
+    : typeof raw.defaultHashtags === "string"
+    ? raw.defaultHashtags.split(",").map((s: string) => s.trim()).filter(Boolean)
+    : [`#${name.replace(/\s+/g, "_")}`, "#متجر", "#عروض"];
+
+  return {
+    id: String(raw.id),
+    name,
+    slug: raw.slug || name.toLowerCase().replace(/\s+/g, "-"),
+    tagline: raw.tagline || "متجر أزياء وتجارة إلكترونية",
+    description: raw.description || `${name} - متجر وحسابات تواصل رسمي`,
+    logo:
+      raw.logo ||
+      "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=200&auto=format&fit=crop&q=80",
+    primaryColor: raw.primaryColor || "#3b82f6",
+    accentColor: raw.accentColor || "#60a5fa",
+    badgeBg: raw.badgeBg || "bg-blue-600",
+    tone: raw.tone || "youthful_trendy",
+    toneLabel: raw.toneLabel || "شبابية عصرية وأنيقة",
+    customAiInstructions: raw.customAiInstructions || "الرد بأسلوب مرح وودي وتوضيح المقاسات المتاحة.",
+    aiReplyInstructions: raw.aiReplyInstructions || raw.customAiInstructions || "الرد بأسلوب مرح وودي وتوضيح المقاسات المتاحة.",
+    defaultHashtags: defaultHashtags.length > 0 ? defaultHashtags : ["#متجر", "#عروض"],
+    priceRange: raw.priceRange || "medium",
+    priceRangeLabel: raw.priceRangeLabel || "متوسطة إلى راقية",
+    pricingTier: raw.pricingTier || "mid",
+    isEnabled: raw.isEnabled !== false,
+    connectedPlatforms:
+      Array.isArray(raw.connectedPlatforms) && raw.connectedPlatforms.length > 0
+        ? raw.connectedPlatforms
+        : ["facebook", "instagram", "tiktok", "whatsapp", "youtube"],
+    autoReplyEnabled: raw.autoReplyEnabled !== false,
+    autoReplyDelaySeconds: typeof raw.autoReplyDelaySeconds === "number" ? raw.autoReplyDelaySeconds : 2,
+    phone: raw.phone || "",
+    whatsappNumber: raw.whatsappNumber || "",
+    whatsappLink: raw.whatsappLink || "",
+    address: raw.address || "",
+    workingHours: raw.workingHours || "",
+  };
+}
+
 export function mergeRemoteAndLocal<T extends { id: string }>(remoteList: T[], localList: T[]): T[] {
   if (!remoteList || remoteList.length === 0) return localList;
   const mergedMap = new Map<string, T>();
   // 1. Add all remote docs first
   remoteList.forEach((item) => {
-    if (item && item.id) mergedMap.set(item.id, item);
+    if (item && item.id) {
+      // If item is brand-like, validate and sanitize it
+      if ("tagline" in item || "defaultHashtags" in item || "connectedPlatforms" in item || "toneLabel" in item) {
+        const clean = sanitizeBrand(item) as unknown as T | null;
+        if (clean) mergedMap.set(item.id, clean);
+      } else {
+        mergedMap.set(item.id, item);
+      }
+    }
   });
   // 2. Add local items if they aren't in remote yet (preventing accidental deletion before cloud sync confirms)
   localList.forEach((item) => {
     if (item && item.id && !mergedMap.has(item.id)) {
-      mergedMap.set(item.id, item);
+      if ("tagline" in item || "defaultHashtags" in item || "connectedPlatforms" in item || "toneLabel" in item) {
+        const clean = sanitizeBrand(item) as unknown as T | null;
+        if (clean) mergedMap.set(item.id, clean);
+      } else {
+        mergedMap.set(item.id, item);
+      }
     }
   });
   return Array.from(mergedMap.values());

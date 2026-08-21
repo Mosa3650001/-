@@ -100,12 +100,12 @@ export const DashboardView: React.FC = () => {
               <span>SmartPost365 • مساحة العمل الذكية لإدارة المتاجر والسوشيال ميديا</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-black text-white leading-tight">
-              {selectedBrand ? `لوحة قيادة: ${selectedBrand.name}` : "لوحة القيادة الموحدة لجميع المتاجر والمشاريع"}
+              {selectedBrand ? `لوحة قيادة: ${selectedBrand.name || "متجر"}` : "لوحة القيادة الموحدة لجميع المتاجر والمشاريع"}
             </h1>
             <p className="text-sm md:text-base text-slate-200 mt-2 max-w-2xl leading-relaxed">
               {selectedBrand
-                ? selectedBrand.description
-                : `تدير حالياً ${brands.length} متاجر نشطة (${brands.map((b) => b.name).join("، ")}) مع مزامنة سحابية مستمرة وصفحات فيسبوك متصلة دون اختفاء.`}
+                ? (selectedBrand.description || selectedBrand.tagline || `${selectedBrand.name} - إدارة المحتوى والتواصل`)
+                : `تدير حالياً ${brands.filter((b) => b && b.name).length} متاجر نشطة (${brands.filter((b) => b && b.name).map((b) => b.name).join("، ")}) مع مزامنة سحابية مستمرة وصفحات فيسبوك متصلة دون اختفاء.`}
             </p>
           </div>
 

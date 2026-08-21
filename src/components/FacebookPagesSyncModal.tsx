@@ -605,11 +605,13 @@ export const FacebookPagesSyncModal: React.FC<FacebookPagesSyncModalProps> = ({
                             }
                             className="text-xs font-bold px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none"
                           >
-                            {brands.map((b) => (
-                              <option key={b.id} value={b.id}>
-                                {b.name}
-                              </option>
-                            ))}
+                            {brands
+                              .filter((b) => b && b.name && b.name.trim().length > 0)
+                              .map((b) => (
+                                <option key={b.id} value={b.id}>
+                                  {b.name}
+                                </option>
+                              ))}
                           </select>
                         </div>
 

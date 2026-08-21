@@ -176,25 +176,31 @@ export const StoreSettingsView: React.FC = () => {
 
       {/* Brand Horizontal Tabs Switcher */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2">
-        {brands.map((b) => {
-          const isActive = b.id === activeBrandTab;
-          return (
-            <button
-              key={b.id}
-              type="button"
-              onClick={() => setActiveBrandTab(b.id)}
-              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border text-xs font-bold transition shrink-0 ${
-                isActive
-                  ? "bg-white dark:bg-[#0f172a] border-indigo-500 text-indigo-600 dark:text-indigo-300 shadow-md ring-2 ring-indigo-500/20"
-                  : "bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700"
-              }`}
-            >
-              <img src={b.logo} alt={b.name} className="w-6 h-6 rounded-lg object-cover border border-slate-200 dark:border-slate-700" />
-              <span>{b.name}</span>
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: b.primaryColor }} />
-            </button>
-          );
-        })}
+        {brands
+          .filter((b) => b && b.name)
+          .map((b) => {
+            const isActive = b.id === activeBrandTab;
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => setActiveBrandTab(b.id)}
+                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border text-xs font-bold transition shrink-0 ${
+                  isActive
+                    ? "bg-white dark:bg-[#0f172a] border-indigo-500 text-indigo-600 dark:text-indigo-300 shadow-md ring-2 ring-indigo-500/20"
+                    : "bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700"
+                }`}
+              >
+                <img
+                  src={b.logo || "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=200&auto=format&fit=crop&q=80"}
+                  alt={b.name}
+                  className="w-6 h-6 rounded-lg object-cover border border-slate-200 dark:border-slate-700"
+                />
+                <span>{b.name}</span>
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: b.primaryColor || "#6366f1" }} />
+              </button>
+            );
+          })}
       </div>
 
       {currentBrand && (
@@ -206,21 +212,21 @@ export const StoreSettingsView: React.FC = () => {
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
                 <div className="flex items-center gap-4">
                   <img
-                    src={currentBrand.logo}
-                    alt={currentBrand.name}
+                    src={currentBrand.logo || "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=200&auto=format&fit=crop&q=80"}
+                    alt={currentBrand.name || "متجر"}
                     className="w-16 h-16 rounded-2xl object-cover border-2 border-slate-200 dark:border-slate-700 shadow-sm"
                   />
                   <div>
-                    <h3 className="font-extrabold text-slate-900 dark:text-white text-lg">{currentBrand.name}</h3>
-                    <p className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold">{currentBrand.tagline}</p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{currentBrand.description}</p>
+                    <h3 className="font-extrabold text-slate-900 dark:text-white text-lg">{currentBrand.name || "متجر جديد"}</h3>
+                    <p className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold">{currentBrand.tagline || "متجر أزياء متكامل"}</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{currentBrand.description || ""}</p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <span
                     className="px-3 py-1 rounded-full text-xs font-bold text-white shadow-xs"
-                    style={{ backgroundColor: currentBrand.primaryColor }}
+                    style={{ backgroundColor: currentBrand.primaryColor || "#6366f1" }}
                   >
                     اللون المعتمد
                   </span>
@@ -233,7 +239,7 @@ export const StoreSettingsView: React.FC = () => {
                   <label className="font-bold text-slate-700 dark:text-slate-300">اسم المتجر:</label>
                   <input
                     type="text"
-                    value={currentBrand.name}
+                    value={currentBrand.name || ""}
                     onChange={(e) => updateBrand(currentBrand.id, { name: e.target.value })}
                     className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 text-slate-900 dark:text-white font-medium focus:outline-none focus:border-indigo-500"
                   />
@@ -243,7 +249,7 @@ export const StoreSettingsView: React.FC = () => {
                   <label className="font-bold text-slate-700 dark:text-slate-300">نبرة وصوت المحتوى (Tone of Voice):</label>
                   <input
                     type="text"
-                    value={currentBrand.toneLabel}
+                    value={currentBrand.toneLabel || ""}
                     onChange={(e) => updateBrand(currentBrand.id, { toneLabel: e.target.value })}
                     className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 text-slate-900 dark:text-white font-medium focus:outline-none focus:border-indigo-500"
                   />
@@ -253,10 +259,10 @@ export const StoreSettingsView: React.FC = () => {
                   <label className="font-bold text-slate-700 dark:text-slate-300">الهاشتاقات المعتمدة تلقائياً لكل المنشورات:</label>
                   <input
                     type="text"
-                    value={currentBrand.defaultHashtags.join(", ")}
+                    value={Array.isArray(currentBrand.defaultHashtags) ? currentBrand.defaultHashtags.join(", ") : ""}
                     onChange={(e) =>
                       updateBrand(currentBrand.id, {
-                        defaultHashtags: e.target.value.split(",").map((h) => h.trim()),
+                        defaultHashtags: e.target.value.split(",").map((h) => h.trim()).filter(Boolean),
                       })
                     }
                     className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 text-slate-900 dark:text-white font-medium focus:outline-none focus:border-indigo-500"
@@ -273,7 +279,7 @@ export const StoreSettingsView: React.FC = () => {
                   </label>
                   <textarea
                     rows={3}
-                    value={currentBrand.aiReplyInstructions}
+                    value={currentBrand.aiReplyInstructions || currentBrand.customAiInstructions || ""}
                     onChange={(e) => updateBrand(currentBrand.id, { aiReplyInstructions: e.target.value })}
                     className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 text-slate-900 dark:text-white font-medium focus:outline-none focus:border-indigo-500 leading-relaxed"
                   />

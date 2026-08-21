@@ -32,6 +32,7 @@ import {
   syncFacebookPagesToFirestore,
   fetchAndSyncAllUserPagesToFirestore,
   mergeRemoteAndLocal,
+  sanitizeBrand,
   FacebookRawPage,
   COLLECTIONS,
 } from "../services/firebaseDb";
@@ -148,8 +149,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [brands, setBrands] = useState<Brand[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.BRANDS);
-    return saved ? JSON.parse(saved) : INITIAL_BRANDS;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.BRANDS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const sanitized = parsed
+            .map((b) => sanitizeBrand(b))
+            .filter((b): b is Brand => b !== null && Boolean(b.name && b.name.trim().length > 0));
+          if (sanitized.length > 0) return sanitized;
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to parse saved brands from localStorage", e);
+    }
+    return INITIAL_BRANDS;
   });
 
   const [currentBrandId, setCurrentBrandIdState] = useState<string>(() => {
@@ -228,8 +242,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data && data.length > 0) {
         setBrands((currentLocal) => {
           const merged = mergeRemoteAndLocal<Brand>(data, currentLocal);
-          // If Firestore has only user-created brands or matches, prioritize remote
-          return merged;
+          const sanitized = merged
+            .map((b) => sanitizeBrand(b))
+            .filter((b): b is Brand => b !== null && Boolean(b.name && b.name.trim().length > 0));
+          return sanitized.length > 0 ? sanitized : INITIAL_BRANDS;
         });
         setIsCloudSynced(true);
       }

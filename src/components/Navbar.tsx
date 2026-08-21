@@ -175,36 +175,38 @@ export const Navbar: React.FC = () => {
 
                 {/* Individual Brands */}
                 <div className="max-h-56 overflow-y-auto">
-                  {brands.map((b) => (
-                    <button
-                      key={b.id}
-                      type="button"
-                      onClick={() => {
-                        setCurrentBrandId(b.id);
-                        setBrandDropdownOpen(false);
-                      }}
-                      className={`w-full flex items-center gap-3 px-3.5 py-2 text-sm transition text-right ${
-                        currentBrandId === b.id
-                          ? "bg-indigo-50 dark:bg-indigo-600/20 text-indigo-700 dark:text-indigo-300 font-bold"
-                          : "text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
-                      }`}
-                    >
-                      <img
-                        src={b.logo}
-                        alt={b.name}
-                        className="w-7 h-7 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
-                      />
-                      <div className="flex-1 overflow-hidden text-right">
-                        <div className="text-sm font-bold text-slate-900 dark:text-white truncate">{b.name}</div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{b.tagline}</div>
-                      </div>
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: b.primaryColor }}
-                      />
-                      {currentBrandId === b.id && <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />}
-                    </button>
-                  ))}
+                  {brands
+                    .filter((b) => b && b.name && b.name.trim().length > 0)
+                    .map((b) => (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => {
+                          setCurrentBrandId(b.id);
+                          setBrandDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-3.5 py-2 text-sm transition text-right ${
+                          currentBrandId === b.id
+                            ? "bg-indigo-50 dark:bg-indigo-600/20 text-indigo-700 dark:text-indigo-300 font-bold"
+                            : "text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        <img
+                          src={b.logo || "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=200&auto=format&fit=crop&q=80"}
+                          alt={b.name}
+                          className="w-7 h-7 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                        />
+                        <div className="flex-1 overflow-hidden text-right">
+                          <div className="text-sm font-bold text-slate-900 dark:text-white truncate">{b.name}</div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{b.tagline || "متجر رسمي"}</div>
+                        </div>
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: b.primaryColor || "#6366f1" }}
+                        />
+                        {currentBrandId === b.id && <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />}
+                      </button>
+                    ))}
                 </div>
 
                 <div className="my-1 border-t border-slate-100 dark:border-slate-800"></div>
