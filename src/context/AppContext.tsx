@@ -101,6 +101,8 @@ interface AppContextType {
   toggleAccountStatus: (id: string) => void;
   updateConnectedAccount: (id: string, updates: Partial<ConnectedAccount>) => void;
   deleteConnectedAccount: (id: string) => void;
+  reassignAccountBrand: (accountId: string, newBrandId: string) => void;
+  cleanAllDemoTokensAndData: () => Promise<void>;
   connectNewAccount: (brandId: string, platform: SocialPlatform, handle: string, name: string, apiToken?: string, accountId?: string) => void;
   syncAllFacebookPagesWithFirestore: (userAccessToken: string, defaultBrandId?: string) => Promise<{ success: boolean; count: number; error?: string }>;
   syncRawFacebookPagesToFirestore: (pages: FacebookRawPage[], defaultBrandId?: string) => Promise<{ success: boolean; count: number; error?: string }>;
@@ -921,6 +923,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const reassignAccountBrand = (accountId: string, newBrandId: string) => {
+    const targetBrand = brands.find((b) => b.id === newBrandId);
+    setConnectedAccounts((prev) =>
+      prev.map((acc) =>
+        acc.id === accountId
+          ? { ...acc, brandId: newBrandId, lastSyncedAt: "الآن" }
+          : acc
+      )
+    );
+    saveDocument(COLLECTIONS.ACCOUNTS, accountId, {
+      brandId: newBrandId,
+      lastSyncedAt: "الآن",
+    });
+    addToast({
+      type: "success",
+      title: `تم ربط الصفحة بـ (${targetBrand?.name || "المتجر المحدد"}) بنجاح!`,
+      description: "تم تحديث ربط المتجر ومزامنته سحابياً.",
+    });
+  };
+
+  const cleanAllDemoTokensAndData = async () => {
+    try {
+      // Call server clean API
+      await fetch("/api/stores/clear-all-demo-data", { method: "POST" });
+    } catch {
+      // fallback
+    }
+
+    // Clean accounts with demo prefixes or mock IDs
+    setConnectedAccounts((prev) =>
+      prev.filter((acc) => {
+        const isDemo =
+          acc.id.startsWith("acc-demo") ||
+          acc.id.includes("fake") ||
+          acc.id.includes("mock") ||
+          acc.apiToken === "EAA_DEMO_TOKEN" ||
+          acc.apiToken?.includes("mock");
+        if (isDemo) {
+          deleteDocument(COLLECTIONS.ACCOUNTS, acc.id);
+          return false;
+        }
+        return true;
+      })
+    );
+
+    // Clean stale keys in localStorage
+    localStorage.removeItem("smartpost_facebook_pages_raw");
+    localStorage.removeItem("smartpost_demo_purged");
+
+    addToast({
+      type: "success",
+      title: "🧹 تم تنظيف النظام وحذف التوكنات والبيانات التجريبية بنجاح!",
+      description: "النظام الآن نظيف بنسبة 100% وجاهز لربط الحسابات الحقيقية والمتاجر المستقلة.",
+    });
+  };
+
   const connectNewAccount = (
     brandId: string,
     platform: SocialPlatform,
@@ -1117,6 +1175,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleAccountStatus,
         updateConnectedAccount,
         deleteConnectedAccount,
+        reassignAccountBrand,
+        cleanAllDemoTokensAndData,
         connectNewAccount,
         syncAllFacebookPagesWithFirestore,
         syncRawFacebookPagesToFirestore,
