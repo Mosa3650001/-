@@ -146,27 +146,48 @@ export function sanitizeBrand(raw: any): Brand | null {
   };
 }
 
+// Helper to detect old mock/demo IDs
+export const isDemoId = (id: string | undefined | null): boolean => {
+  if (!id || typeof id !== "string") return false;
+  return (
+    id.startsWith("brand-bilal-koo") ||
+    id.startsWith("brand-tawfeer-world") ||
+    id.startsWith("brand-al-sarkha") ||
+    id.startsWith("acc-bk-") ||
+    id.startsWith("acc-tw-") ||
+    id.startsWith("acc-as-") ||
+    id.startsWith("post-") ||
+    id.startsWith("idea-") ||
+    id.startsWith("inbox-") ||
+    id === "usr-1" ||
+    id === "usr-2" ||
+    id === "usr-3" ||
+    id === "usr-4"
+  );
+};
+
 export function mergeRemoteAndLocal<T extends { id: string }>(remoteList: T[], localList: T[]): T[] {
-  if (!remoteList || remoteList.length === 0) return localList;
+  if (!remoteList && !localList) return [];
   const mergedMap = new Map<string, T>();
-  // 1. Add all remote docs first
-  remoteList.forEach((item) => {
-    if (item && item.id) {
-      // If item is brand-like, validate and sanitize it
+  
+  // 1. Add all remote docs first (excluding demo data)
+  (remoteList || []).forEach((item) => {
+    if (item && item.id && !isDemoId(item.id)) {
       if ("tagline" in item || "defaultHashtags" in item || "connectedPlatforms" in item || "toneLabel" in item) {
         const clean = sanitizeBrand(item) as unknown as T | null;
-        if (clean) mergedMap.set(item.id, clean);
+        if (clean && !isDemoId(clean.id)) mergedMap.set(item.id, clean);
       } else {
         mergedMap.set(item.id, item);
       }
     }
   });
-  // 2. Add local items if they aren't in remote yet (preventing accidental deletion before cloud sync confirms)
-  localList.forEach((item) => {
-    if (item && item.id && !mergedMap.has(item.id)) {
+
+  // 2. Add local items if they aren't in remote yet (excluding demo data)
+  (localList || []).forEach((item) => {
+    if (item && item.id && !isDemoId(item.id) && !mergedMap.has(item.id)) {
       if ("tagline" in item || "defaultHashtags" in item || "connectedPlatforms" in item || "toneLabel" in item) {
         const clean = sanitizeBrand(item) as unknown as T | null;
-        if (clean) mergedMap.set(item.id, clean);
+        if (clean && !isDemoId(clean.id)) mergedMap.set(item.id, clean);
       } else {
         mergedMap.set(item.id, item);
       }
@@ -175,45 +196,90 @@ export function mergeRemoteAndLocal<T extends { id: string }>(remoteList: T[], l
   return Array.from(mergedMap.values());
 }
 
-// 4. Initial Seed Function to copy initial data to cloud if collection is empty
+/**
+ * Purge any remaining demo data from Firestore and LocalStorage
+ */
+export async function purgeAllDemoDataFromFirestoreAndLocal(): Promise<void> {
+  try {
+    const demoCollections = [
+      COLLECTIONS.BRANDS,
+      COLLECTIONS.ACCOUNTS,
+      COLLECTIONS.POSTS,
+      COLLECTIONS.IDEAS,
+      COLLECTIONS.INBOX,
+      COLLECTIONS.USERS,
+    ];
+
+    for (const colName of demoCollections) {
+      try {
+        const snap = await getDocs(collection(db, colName));
+        for (const d of snap.docs) {
+          if (isDemoId(d.id)) {
+            await deleteDoc(doc(db, colName, d.id));
+          }
+        }
+      } catch (e) {
+        console.warn(`Error cleaning demo docs from ${colName}:`, e);
+      }
+    }
+
+    if (typeof window !== "undefined") {
+      const keys = [
+        "socialhub_brands_v1",
+        "socialhub_accounts_v1",
+        "socialhub_posts_v1",
+        "socialhub_inbox_v1",
+        "socialhub_ideas_v1",
+      ];
+      keys.forEach((key) => {
+        try {
+          const val = localStorage.getItem(key);
+          if (val) {
+            const parsed = JSON.parse(val);
+            if (Array.isArray(parsed)) {
+              const cleaned = parsed.filter((item: any) => !isDemoId(item?.id));
+              localStorage.setItem(key, JSON.stringify(cleaned));
+            }
+          }
+        } catch {
+          // ignore
+        }
+      });
+    }
+  } catch (err) {
+    console.warn("Could not finish purge of demo data:", err);
+  }
+}
+
+// 4. Initial Seed Function (strictly empty / clean)
 export async function seedInitialFirestoreData(
-  initialBrands: Brand[],
-  initialAccounts: ConnectedAccount[],
-  initialIdeas: ContentIdea[],
-  initialPosts: Post[],
-  initialInbox: InboxItem[],
+  _initialBrands: Brand[],
+  _initialAccounts: ConnectedAccount[],
+  _initialIdeas: ContentIdea[],
+  _initialPosts: Post[],
+  _initialInbox: InboxItem[],
   initialTeam: TeamMember[],
   initialGoals: DailyPublishGoal[]
 ): Promise<void> {
   try {
-    const brandsSnap = await getDocs(collection(db, COLLECTIONS.BRANDS));
-    if (brandsSnap.empty) {
-      console.log("Seeding initial brands to cloud Firestore...");
-      for (const brand of initialBrands) {
-        await setDoc(doc(db, COLLECTIONS.BRANDS, brand.id), brand);
-      }
-      for (const acc of initialAccounts) {
-        await setDoc(doc(db, COLLECTIONS.ACCOUNTS, acc.id), acc);
-      }
-      for (const idea of initialIdeas) {
-        await setDoc(doc(db, COLLECTIONS.IDEAS, idea.id), idea);
-      }
-      for (const post of initialPosts) {
-        await setDoc(doc(db, COLLECTIONS.POSTS, post.id), post);
-      }
-      for (const inbox of initialInbox) {
-        await setDoc(doc(db, COLLECTIONS.INBOX, inbox.id), inbox);
-      }
+    // Only seed the super admin user and goals if empty, never fake brands or accounts
+    const usersSnap = await getDocs(collection(db, COLLECTIONS.USERS));
+    if (usersSnap.empty && initialTeam.length > 0) {
       for (const member of initialTeam) {
-        await setDoc(doc(db, COLLECTIONS.USERS, member.id), member);
+        if (!isDemoId(member.id)) {
+          await setDoc(doc(db, COLLECTIONS.USERS, member.id), member);
+        }
       }
+    }
+
+    const goalsSnap = await getDocs(collection(db, COLLECTIONS.GOALS));
+    if (goalsSnap.empty && initialGoals.length > 0) {
       for (const goal of initialGoals) {
         await setDoc(doc(db, COLLECTIONS.GOALS, goal.id), goal);
       }
-      console.log("Firestore cloud seed complete.");
     }
   } catch (error) {
-    console.warn("Could not seed Firestore (might be offline or permissions):", error);
+    console.warn("Could not seed Firestore default configuration:", error);
   }
 }
 
@@ -357,25 +423,14 @@ export async function syncFacebookPagesToFirestore(
         updatedAt: nowIso,
       };
 
-      // 4. Save to Firestore permanently across both collections:
+      // 4. Save to Firestore permanently:
       // (a) COLLECTIONS.ACCOUNTS (key: fb_123456)
       await saveDocument(COLLECTIONS.ACCOUNTS, accountDocId, formattedRecord);
 
-      // (b) Also link/update account for the specific store
-      const brandSpecificAccId = `acc-${connectedStoreId}-facebook`;
-      await saveDocument(COLLECTIONS.ACCOUNTS, brandSpecificAccId, {
-        ...formattedRecord,
-        id: brandSpecificAccId,
-      });
-
-      // (c) COLLECTIONS.FACEBOOK_PAGES (key: 123456)
+      // (b) COLLECTIONS.FACEBOOK_PAGES (key: 123456)
       await saveDocument(COLLECTIONS.FACEBOOK_PAGES, pageId, formattedRecord);
 
       syncedAccounts.push(formattedRecord as unknown as ConnectedAccount);
-      syncedAccounts.push({
-        ...formattedRecord,
-        id: brandSpecificAccId,
-      } as unknown as ConnectedAccount);
       normalizedFbPages.push(formattedRecord);
     }
 

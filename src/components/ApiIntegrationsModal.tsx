@@ -203,7 +203,48 @@ export const ApiIntegrationsModal: React.FC<{
     }
   }, [selectedAccountId, activeAccount]);
 
-  if (!isOpen || !activeAccount) return null;
+  if (!isOpen) return null;
+
+  if (!activeAccount) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+        <div
+          className="bg-white dark:bg-[#0B1120] border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-lg p-6 text-center shadow-2xl text-slate-900 dark:text-slate-100"
+          dir="rtl"
+        >
+          <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 mx-auto mb-4">
+            <Key className="w-7 h-7" />
+          </div>
+          <h3 className="text-lg font-black mb-2 text-slate-900 dark:text-white">
+            لا توجد حسابات أو صفحات مضافة حتى الآن
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-6">
+            ابدأ بربط ومزامنة صفحات فيسبوك بضغطة زر واحدة أو أضف متجرك أولاً لتتمكن من إدارة مفاتيح الـ API والنشر التلقائي.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              onClick={() => setIsFbSyncModalOpen(true)}
+              className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
+            >
+              <span>🔗 مزامنة صفحات فيسبوك الآن</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="px-5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs"
+            >
+              إغلاق
+            </button>
+          </div>
+          {isFbSyncModalOpen && (
+            <FacebookPagesSyncModal
+              isOpen={isFbSyncModalOpen}
+              onClose={() => setIsFbSyncModalOpen(false)}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const handleSaveCredentials = (e: React.FormEvent) => {
     e.preventDefault();

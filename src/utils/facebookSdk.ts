@@ -152,13 +152,29 @@ export const loginAndFetchFacebookPages = async (
     }
 
     return new Promise((resolve) => {
+      let isResolved = false;
+      const timeoutId = setTimeout(() => {
+        if (!isResolved) {
+          isResolved = true;
+          resolve({
+            success: false,
+            pages: [],
+            error: "استغرقت عملية تسجيل الدخول وقتاً طويلاً أو تم إغلاق نافذة فيسبوك المنبثقة.",
+          });
+        }
+      }, 45000);
+
       window.FB!.login(
         (response: FacebookLoginResponse) => {
+          if (isResolved) return;
+          clearTimeout(timeoutId);
+
           if (response.status !== "connected" || !response.authResponse) {
+            isResolved = true;
             return resolve({
               success: false,
               pages: [],
-              error: "تم إغلاق نافذة تسجيل الدخول أو رفض منح الأذونات المطلوبة.",
+              error: "تم إغلاق نافذة تسجيل الدخول أو لم يتم منح صلاحيات الوصول للصفحات.",
             });
           }
 
@@ -174,6 +190,9 @@ export const loginAndFetchFacebookPages = async (
               access_token: userAccessToken,
             },
             (pagesResponse: any) => {
+              if (isResolved) return;
+              isResolved = true;
+
               if (pagesResponse.error) {
                 return resolve({
                   success: false,

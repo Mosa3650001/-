@@ -175,33 +175,66 @@ export const StoreSettingsView: React.FC = () => {
       </div>
 
       {/* Brand Horizontal Tabs Switcher */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2">
-        {brands
-          .filter((b) => b && b.name)
-          .map((b) => {
-            const isActive = b.id === activeBrandTab;
-            return (
-              <button
-                key={b.id}
-                type="button"
-                onClick={() => setActiveBrandTab(b.id)}
-                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border text-xs font-bold transition shrink-0 ${
-                  isActive
-                    ? "bg-white dark:bg-[#0f172a] border-indigo-500 text-indigo-600 dark:text-indigo-300 shadow-md ring-2 ring-indigo-500/20"
-                    : "bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700"
-                }`}
-              >
-                <img
-                  src={b.logo || "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=200&auto=format&fit=crop&q=80"}
-                  alt={b.name}
-                  className="w-6 h-6 rounded-lg object-cover border border-slate-200 dark:border-slate-700"
-                />
-                <span>{b.name}</span>
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: b.primaryColor || "#6366f1" }} />
-              </button>
-            );
-          })}
-      </div>
+      {brands.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-2">
+          {brands
+            .filter((b) => b && b.name)
+            .map((b) => {
+              const isActive = b.id === activeBrandTab;
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => setActiveBrandTab(b.id)}
+                  className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border text-xs font-bold transition shrink-0 ${
+                    isActive
+                      ? "bg-white dark:bg-[#0f172a] border-indigo-500 text-indigo-600 dark:text-indigo-300 shadow-md ring-2 ring-indigo-500/20"
+                      : "bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700"
+                  }`}
+                >
+                  <img
+                    src={b.logo || "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=200&auto=format&fit=crop&q=80"}
+                    alt={b.name}
+                    className="w-6 h-6 rounded-lg object-cover border border-slate-200 dark:border-slate-700"
+                  />
+                  <span>{b.name}</span>
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: b.primaryColor || "#6366f1" }} />
+                </button>
+              );
+            })}
+        </div>
+      )}
+
+      {/* Empty State when no brands exist */}
+      {!currentBrand && (
+        <div className="p-12 rounded-3xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 text-center shadow-sm space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 mx-auto">
+            <Store className="w-8 h-8" />
+          </div>
+          <h3 className="text-lg font-black text-slate-900 dark:text-white">لا يوجد أي متجر مضاف حالياً</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+            قائمتك خالية ونظيفة من أي بيانات تجريبية. يمكنك البدء بإضافة متجرك الأول، أو مزامنة صفحات فيسبوك مباشرة.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setIsAddStoreModalOpen(true)}
+              className="px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ إضافة متجر جديد يدوي</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsFbSyncModalOpen(true)}
+              className="px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/25 transition flex items-center gap-2"
+            >
+              <Facebook className="w-4 h-4" />
+              <span>🔗 ربط ومزامنة صفحات فيسبوك</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {currentBrand && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -308,80 +341,112 @@ export const StoreSettingsView: React.FC = () => {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                {brandAccounts.map((account) => (
-                  <div
-                    key={account.id}
-                    className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 text-right"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-800 dark:text-white shrink-0">
-                        {account.platform === "instagram" && <Instagram className="w-5 h-5 text-pink-500" />}
-                        {account.platform === "tiktok" && <Video className="w-5 h-5 text-cyan-400" />}
-                        {account.platform === "facebook" && <Facebook className="w-5 h-5 text-blue-500" />}
-                        {account.platform === "whatsapp" && <MessageCircle className="w-5 h-5 text-emerald-500" />}
-                        {account.platform === "youtube" && <PlaySquare className="w-5 h-5 text-red-500" />}
-                      </div>
-                      <div>
-                        <div className="font-bold text-slate-900 dark:text-white text-xs flex items-center gap-1.5">
-                          <span>{account.accountName}</span>
-                          {account.apiToken ? (
-                            <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-mono font-bold">
-                              API ✓
-                            </span>
-                          ) : (
-                            <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-slate-200 dark:bg-slate-800 text-slate-500 font-mono">
-                              No Token
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">{account.handle}</div>
-                        <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                          {account.followersCount.toLocaleString("ar-SA")} متابع
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col items-end gap-1.5 shrink-0">
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => openApiModalForAccount(account)}
-                          className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 transition"
-                          title="ضبط مفاتيح الـ API لهذا الحساب"
-                        >
-                          <Key className="w-3.5 h-3.5" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => toggleAccountStatus(account.id)}
-                          className={`text-[10px] px-2.5 py-1 rounded-full font-bold transition ${
-                            account.status === "connected"
-                              ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-                              : "bg-slate-200 dark:bg-slate-800 text-slate-500"
-                          }`}
-                        >
-                          {account.status === "connected" ? "✓ متصل" : "معطل"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (confirm(`هل أنت متأكد من حذف الحساب (${account.accountName})؟`)) {
-                              deleteConnectedAccount(account.id);
-                            }
-                          }}
-                          className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition"
-                          title="حذف هذا الحساب نهائياً"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
+              {brandAccounts.length === 0 ? (
+                <div className="p-8 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl space-y-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto">
+                    <Share2 className="w-5 h-5" />
                   </div>
-                ))}
-              </div>
+                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    لا توجد صفحات أو حسابات تواصل مرتبطة بهذا المتجر بعد
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+                    يمكنك ربط صفحة فيسبوك أو إنستغرام لهذا المتجر للبدء في النشر التلقائي ومزامنة التعليقات.
+                  </p>
+                  <div className="flex items-center justify-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsFbSyncModalOpen(true)}
+                      className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] flex items-center gap-1.5 transition"
+                    >
+                      <Facebook className="w-3.5 h-3.5" />
+                      <span>مزامنة صفحات فيسبوك</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsConnectAccountModalOpen(true)}
+                      className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[11px] flex items-center gap-1.5 transition"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>إضافة حساب يدوياً</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                  {brandAccounts.map((account) => (
+                    <div
+                      key={account.id}
+                      className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 text-right"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-800 dark:text-white shrink-0">
+                          {account.platform === "instagram" && <Instagram className="w-5 h-5 text-pink-500" />}
+                          {account.platform === "tiktok" && <Video className="w-5 h-5 text-cyan-400" />}
+                          {account.platform === "facebook" && <Facebook className="w-5 h-5 text-blue-500" />}
+                          {account.platform === "whatsapp" && <MessageCircle className="w-5 h-5 text-emerald-500" />}
+                          {account.platform === "youtube" && <PlaySquare className="w-5 h-5 text-red-500" />}
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-900 dark:text-white text-xs flex items-center gap-1.5">
+                            <span>{account.accountName}</span>
+                            {account.apiToken ? (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-mono font-bold">
+                                API ✓
+                              </span>
+                            ) : (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-slate-200 dark:bg-slate-800 text-slate-500 font-mono">
+                                No Token
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">{account.handle}</div>
+                          <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                            {account.followersCount.toLocaleString("ar-SA")} متابع
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openApiModalForAccount(account)}
+                            className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 transition"
+                            title="ضبط مفاتيح الـ API لهذا الحساب"
+                          >
+                            <Key className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => toggleAccountStatus(account.id)}
+                            className={`text-[10px] px-2.5 py-1 rounded-full font-bold transition ${
+                              account.status === "connected"
+                                ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                                : "bg-slate-200 dark:bg-slate-800 text-slate-500"
+                            }`}
+                          >
+                            {account.status === "connected" ? "✓ متصل" : "معطل"}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`هل أنت متأكد من حذف الحساب (${account.accountName})؟`)) {
+                                deleteConnectedAccount(account.id);
+                              }
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition"
+                            title="حذف هذا الحساب نهائياً"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -401,27 +466,26 @@ export const StoreSettingsView: React.FC = () => {
             </div>
 
             {/* Danger Zone: Delete Store */}
-            {brands.length > 1 && (
-              <div className="p-6 rounded-3xl bg-white dark:bg-[#0f172a] border border-rose-200 dark:border-rose-900/40 space-y-3 text-right">
-                <h4 className="text-xs font-bold text-rose-600 dark:text-rose-400">حذف هذا المتجر</h4>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                  سيؤدي هذا الإجراء إلى إزالة العلامة التجارية وحساباتها من المنصة بشكل دائم.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm(`هل أنت متأكد من حذف متجر (${currentBrand.name})؟`)) {
-                      deleteBrand(currentBrand.id);
-                      setActiveBrandTab(brands[0].id);
-                    }
-                  }}
-                  className="px-4 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 text-xs font-bold transition flex items-center gap-1.5"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>تأكيد حذف المتجر</span>
-                </button>
-              </div>
-            )}
+            <div className="p-6 rounded-3xl bg-white dark:bg-[#0f172a] border border-rose-200 dark:border-rose-900/40 space-y-3 text-right">
+              <h4 className="text-xs font-bold text-rose-600 dark:text-rose-400">حذف هذا المتجر</h4>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                سيؤدي هذا الإجراء إلى إزالة المتجر ({currentBrand.name}) وحساباته المربوطة من المنصة.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm(`هل أنت متأكد من حذف متجر (${currentBrand.name})؟`)) {
+                    deleteBrand(currentBrand.id);
+                    const remaining = brands.filter((b) => b.id !== currentBrand.id);
+                    setActiveBrandTab(remaining[0]?.id || "");
+                  }
+                }}
+                className="px-4 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 text-xs font-bold transition flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>تأكيد حذف المتجر</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

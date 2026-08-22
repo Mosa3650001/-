@@ -33,6 +33,8 @@ import {
   fetchAndSyncAllUserPagesToFirestore,
   mergeRemoteAndLocal,
   sanitizeBrand,
+  isDemoId,
+  purgeAllDemoDataFromFirestoreAndLocal,
   FacebookRawPage,
   COLLECTIONS,
 } from "../services/firebaseDb";
@@ -155,15 +157,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const sanitized = parsed
+            .filter((b) => !isDemoId(b?.id))
             .map((b) => sanitizeBrand(b))
             .filter((b): b is Brand => b !== null && Boolean(b.name && b.name.trim().length > 0));
-          if (sanitized.length > 0) return sanitized;
+          return sanitized;
         }
       }
     } catch (e) {
       console.warn("Failed to parse saved brands from localStorage", e);
     }
-    return INITIAL_BRANDS;
+    return [];
   });
 
   const [currentBrandId, setCurrentBrandIdState] = useState<string>(() => {
@@ -172,18 +175,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
-    return saved ? JSON.parse(saved) : INITIAL_CONNECTED_ACCOUNTS;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((acc) => !isDemoId(acc?.id));
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return [];
   });
 
   const [posts, setPosts] = useState<Post[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.POSTS);
-    return saved ? JSON.parse(saved) : INITIAL_POSTS;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.POSTS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((p) => !isDemoId(p?.id));
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return [];
   });
 
   const [ideas, setIdeas] = useState<ContentIdea[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.IDEAS);
-    return saved ? JSON.parse(saved) : INITIAL_IDEAS;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.IDEAS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((i) => !isDemoId(i?.id));
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return [];
   });
 
   const [dailyGoals, setDailyGoals] = useState<DailyPublishGoal[]>(() => {
@@ -192,8 +225,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [inboxItems, setInboxItems] = useState<InboxItem[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.INBOX);
-    return saved ? JSON.parse(saved) : INITIAL_INBOX_ITEMS;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.INBOX);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((item) => !isDemoId(item?.id));
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return [];
   });
 
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => {
@@ -224,61 +267,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSidebarOpen((prev) => !prev);
   };
 
-  // Real-time Cloud Firestore Subscriptions & Initial Seeding
+  // Real-time Cloud Firestore Subscriptions & Initial Clean-up
   useEffect(() => {
-    // Seed initial data to cloud if collections are empty
-    seedInitialFirestoreData(
-      brands,
-      connectedAccounts,
-      ideas,
-      posts,
-      inboxItems,
-      teamMembers,
-      dailyGoals
-    );
+    // Purge any lingering demo documents and sync clean schema
+    purgeAllDemoDataFromFirestoreAndLocal();
+    seedInitialFirestoreData([], [], [], [], [], teamMembers, dailyGoals);
 
     // Listen to real-time updates from cloud Firestore with Smart Merge
     const unsubBrands = subscribeToCollection<Brand>(COLLECTIONS.BRANDS, (data) => {
-      if (data && data.length > 0) {
-        setBrands((currentLocal) => {
-          const merged = mergeRemoteAndLocal<Brand>(data, currentLocal);
-          const sanitized = merged
-            .map((b) => sanitizeBrand(b))
-            .filter((b): b is Brand => b !== null && Boolean(b.name && b.name.trim().length > 0));
-          return sanitized.length > 0 ? sanitized : INITIAL_BRANDS;
-        });
-        setIsCloudSynced(true);
-      }
+      setBrands((currentLocal) => {
+        const cleanRemote = (data || []).filter((b) => !isDemoId(b?.id));
+        const merged = mergeRemoteAndLocal<Brand>(cleanRemote, currentLocal);
+        const sanitized = merged
+          .filter((b) => !isDemoId(b?.id))
+          .map((b) => sanitizeBrand(b))
+          .filter((b): b is Brand => b !== null && Boolean(b.name && b.name.trim().length > 0));
+        return sanitized;
+      });
+      setIsCloudSynced(true);
     });
 
     const unsubAccounts = subscribeToCollection<ConnectedAccount>(COLLECTIONS.ACCOUNTS, (data) => {
-      if (data && data.length > 0) {
-        setConnectedAccounts((currentLocal) => {
-          return mergeRemoteAndLocal<ConnectedAccount>(data, currentLocal);
-        });
-        setIsCloudSynced(true);
-      }
+      setConnectedAccounts((currentLocal) => {
+        const cleanRemote = (data || []).filter((acc) => !isDemoId(acc?.id));
+        return mergeRemoteAndLocal<ConnectedAccount>(cleanRemote, currentLocal).filter(
+          (acc) => !isDemoId(acc?.id)
+        );
+      });
+      setIsCloudSynced(true);
     });
 
     const unsubIdeas = subscribeToCollection<ContentIdea>(COLLECTIONS.IDEAS, (data) => {
-      if (data && data.length > 0) {
-        setIdeas((currentLocal) => mergeRemoteAndLocal<ContentIdea>(data, currentLocal));
-        setIsCloudSynced(true);
-      }
+      setIdeas((currentLocal) => {
+        const cleanRemote = (data || []).filter((i) => !isDemoId(i?.id));
+        return mergeRemoteAndLocal<ContentIdea>(cleanRemote, currentLocal).filter((i) => !isDemoId(i?.id));
+      });
+      setIsCloudSynced(true);
     });
 
     const unsubPosts = subscribeToCollection<Post>(COLLECTIONS.POSTS, (data) => {
-      if (data && data.length > 0) {
-        setPosts((currentLocal) => mergeRemoteAndLocal<Post>(data, currentLocal));
-        setIsCloudSynced(true);
-      }
+      setPosts((currentLocal) => {
+        const cleanRemote = (data || []).filter((p) => !isDemoId(p?.id));
+        return mergeRemoteAndLocal<Post>(cleanRemote, currentLocal).filter((p) => !isDemoId(p?.id));
+      });
+      setIsCloudSynced(true);
     });
 
     const unsubInbox = subscribeToCollection<InboxItem>(COLLECTIONS.INBOX, (data) => {
-      if (data && data.length > 0) {
-        setInboxItems((currentLocal) => mergeRemoteAndLocal<InboxItem>(data, currentLocal));
-        setIsCloudSynced(true);
-      }
+      setInboxItems((currentLocal) => {
+        const cleanRemote = (data || []).filter((i) => !isDemoId(i?.id));
+        return mergeRemoteAndLocal<InboxItem>(cleanRemote, currentLocal).filter((i) => !isDemoId(i?.id));
+      });
+      setIsCloudSynced(true);
     });
 
     const unsubTeam = subscribeToCollection<TeamMember>(COLLECTIONS.USERS, (data) => {
@@ -783,43 +823,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // --- BRAND METHODS ---
   const createBrand = (brandData: Omit<Brand, "id">): Brand => {
-    const id = "brand-" + Date.now();
+    const id = "store-" + Date.now();
     const newBrand: Brand = {
       ...brandData,
       id,
     };
-    
-    // Auto-create initial connected accounts placeholders
-    const newAccounts: ConnectedAccount[] = brandData.connectedPlatforms.map((platform) => ({
-      id: `acc-${id}-${platform}`,
-      brandId: id,
-      platform,
-      accountName: `${newBrand.name} - ${platform}`,
-      handle: `@${newBrand.slug}_${platform}`,
-      avatar: newBrand.logo || "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=100&auto=format&fit=crop&q=80",
-      followersCount: 1200,
-      status: "connected",
-      lastSyncedAt: "الآن",
-      canPublish: true,
-      canReadComments: true,
-      canDirectMessage: true,
-    }));
 
-    // Synchronously write to LocalStorage first to guarantee zero data-loss on instant page refresh
+    // Synchronously write to LocalStorage first to guarantee zero data-loss
     setBrands((prev) => {
       const updated = [...prev, newBrand];
       try {
         localStorage.setItem(STORAGE_KEYS.BRANDS, JSON.stringify(updated));
-      } catch (e) {
-        // ignore
-      }
-      return updated;
-    });
-
-    setConnectedAccounts((prev) => {
-      const updated = [...prev, ...newAccounts];
-      try {
-        localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updated));
       } catch (e) {
         // ignore
       }
@@ -833,13 +847,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
 
-    for (const acc of newAccounts) {
-      saveDocument(COLLECTIONS.ACCOUNTS, acc.id, acc);
-    }
-
     addToast({
       type: "success",
-      title: `تم إنشاء متجر ومزامنته سحابياً: ${newBrand.name}`,
+      title: `تم إنشاء المتجر بنجاح ومزامنته: ${newBrand.name}`,
     });
     return newBrand;
   };
@@ -856,14 +866,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteBrand = (id: string) => {
-    if (brands.length <= 1) {
-      addToast({
-        type: "error",
-        title: "لا يمكن حذف المتجر الأخير",
-        description: "يجب أن يبقى متجر واحد على الأقل في المنصة.",
-      });
-      return;
-    }
     setBrands((prev) => prev.filter((b) => b.id !== id));
     setConnectedAccounts((prev) => prev.filter((a) => a.brandId !== id));
     deleteDocument(COLLECTIONS.BRANDS, id);
