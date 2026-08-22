@@ -174,7 +174,8 @@ export const ApiIntegrationsModal: React.FC<{
 
   const activeAccount = (selectedAccountId ? connectedAccounts.find((a) => a.id === selectedAccountId) : null) || targetAccount || connectedAccounts[0];
   const activeBrand = brands.find((b) => b.id === activeAccount?.brandId);
-  const guide = activeAccount ? PLATFORM_GUIDES[activeAccount.platform] : PLATFORM_GUIDES.facebook;
+  const rawPlatform = (activeAccount?.platform || "facebook").toLowerCase() as SocialPlatform;
+  const guide: PlatformConfigGuide = PLATFORM_GUIDES[rawPlatform] || PLATFORM_GUIDES.facebook;
 
   // Local Form states
   const [tokenInput, setTokenInput] = useState<string>("");
