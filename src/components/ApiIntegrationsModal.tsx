@@ -184,6 +184,7 @@ export const ApiIntegrationsModal: React.FC<{
   const [showToken, setShowToken] = useState<boolean>(false);
   const [isTesting, setIsTesting] = useState<boolean>(false);
   const [isConnectingOAuth, setIsConnectingOAuth] = useState<boolean>(false);
+  const [isFbSyncModalOpen, setIsFbSyncModalOpen] = useState<boolean>(false);
   const [testResult, setTestResult] = useState<{
     tested: boolean;
     success: boolean;
@@ -221,8 +222,6 @@ export const ApiIntegrationsModal: React.FC<{
       description: `الحساب: ${activeAccount.accountName}`,
     });
   };
-
-  const [isFbSyncModalOpen, setIsFbSyncModalOpen] = useState<boolean>(false);
 
   const handleFacebookOAuth = async () => {
     setIsConnectingOAuth(true);
