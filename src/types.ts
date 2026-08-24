@@ -88,6 +88,7 @@ export interface PlatformPostContent {
   callToAction?: string;
   format: PostFormat;
   mediaUrl?: string;
+  mediaType?: "image" | "video";
   customized?: boolean;
 }
 
@@ -99,6 +100,7 @@ export interface Post {
   targetPlatforms: SocialPlatform[];
   contentPerPlatform: Partial<Record<SocialPlatform, PlatformPostContent>>;
   mediaUrls: string[];
+  mediaType?: "image" | "video";
   templateId?: string;
   productPrice?: number;
   productDiscount?: number;

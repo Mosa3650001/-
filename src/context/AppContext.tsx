@@ -586,7 +586,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const createPost = (postData: Omit<Post, "id" | "createdAt">): Post => {
     const newPost: Post = {
       ...postData,
-      id: "post-" + Date.now(),
+      id: `post_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       createdAt: new Date().toISOString(),
       createdBy: currentUser.id,
       createdByName: currentUser.name,
@@ -604,7 +604,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast({
       type: "success",
       title: newPost.status === "published" ? "تم نشر المنشور ومزامنته سحابياً!" : "تمت جدولة المنشور بنجاح!",
-      description: `المشروع: ${newPost.targetBrandIds.map(id => brands.find(b => b.id === id)?.name || id).join("، ")}`,
+      description: `المشروع: ${(newPost.targetBrandIds || [newPost.brandId]).map(id => brands.find(b => b.id === id)?.name || id).join("، ")}`,
     });
     return newPost;
   };
@@ -691,8 +691,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (fbAccounts.length > 0) {
         const fbContent = post.contentPerPlatform?.facebook;
+        const cleanTags = (fbContent?.hashtags || [])
+          .map((t) => (t.startsWith("#") ? t : `#${t}`).trim())
+          .filter(Boolean);
         const msg = fbContent
-          ? `${fbContent.hook ? fbContent.hook + "\n\n" : ""}${fbContent.caption}\n\n${(fbContent.hashtags || []).join(" ")}\n\n${fbContent.callToAction || ""}`
+          ? `${fbContent.hook ? fbContent.hook + "\n\n" : ""}${fbContent.caption}\n\n${cleanTags.join(" ")}\n\n${fbContent.callToAction || ""}`
           : post.title;
 
         for (const fbAccount of fbAccounts) {
@@ -705,6 +708,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 pageAccessToken: fbAccount.apiToken,
                 message: msg.trim(),
                 imageUrl: post.mediaUrls?.[0],
+                mediaUrl: post.mediaUrls?.[0],
+                mediaType: post.mediaType || (post.mediaUrls?.[0]?.includes("video") || post.mediaUrls?.[0]?.startsWith("data:video/") ? "video" : "image"),
               }),
             });
             const fbData = await fbRes.json();

@@ -282,6 +282,21 @@ Return strictly valid JSON matching the schema.
     const text = response.text;
     if (text) {
       const parsed = JSON.parse(text);
+      if (parsed.captions && typeof parsed.captions === "object") {
+        for (const [platform, content] of Object.entries(parsed.captions) as [string, any][]) {
+          if (content && content.hashtags) {
+            const rawTags = Array.isArray(content.hashtags) ? content.hashtags : [content.hashtags];
+            content.hashtags = rawTags
+              .map((t: string) => {
+                if (typeof t !== "string") return "";
+                let tag = t.trim().replace(/^#+/, "").replace(/[,،\.!؟;:|\/]/g, "").trim();
+                tag = tag.replace(/\s+/g, "_");
+                return tag ? `#${tag}` : "";
+              })
+              .filter(Boolean);
+          }
+        }
+      }
       return res.json({
         success: true,
         source: "gemini-3.7-flash",
@@ -1046,7 +1061,7 @@ app.post("/api/facebook/test-connection", async (req: Request, res: Response) =>
 
 app.post("/api/facebook/publish-post", async (req: Request, res: Response) => {
   try {
-    const { pageId, pageAccessToken, message, link, imageUrl } = req.body;
+    const { pageId, pageAccessToken, message, link, imageUrl, mediaUrl, mediaType } = req.body;
 
     if (!pageAccessToken || !pageId) {
       return res.status(400).json({
@@ -1057,22 +1072,81 @@ app.post("/api/facebook/publish-post", async (req: Request, res: Response) => {
 
     const cleanToken = pageAccessToken.trim();
     const cleanPageId = pageId.trim();
+    const targetMedia = mediaUrl || imageUrl;
 
-    let fbRes;
-    if (imageUrl && (imageUrl.startsWith("http://") || imageUrl.startsWith("https://"))) {
-      // Publish as Photo Post
+    let fbRes: any;
+
+    // Case 1: Base64 Uploaded Image from local device
+    if (targetMedia && typeof targetMedia === "string" && targetMedia.startsWith("data:image/")) {
+      const parts = targetMedia.split(";base64,");
+      const mimeType = parts[0].replace("data:", "") || "image/jpeg";
+      const base64Data = parts[1];
+      const buffer = Buffer.from(base64Data, "base64");
+      const blob = new Blob([buffer], { type: mimeType });
+
+      const formData = new FormData();
+      formData.append("source", blob, "uploaded-post-image.jpg");
+      formData.append("caption", message || "");
+      formData.append("access_token", cleanToken);
+
+      const fbPhotoUrl = `https://graph.facebook.com/v19.0/${cleanPageId}/photos`;
+      fbRes = await fetch(fbPhotoUrl, {
+        method: "POST",
+        body: formData,
+      });
+    }
+    // Case 2: Base64 Uploaded Video or Video URL
+    else if (
+      (targetMedia && typeof targetMedia === "string" && targetMedia.startsWith("data:video/")) ||
+      mediaType === "video" ||
+      (typeof targetMedia === "string" && (targetMedia.endsWith(".mp4") || targetMedia.endsWith(".mov") || targetMedia.includes("video")))
+    ) {
+      if (targetMedia && targetMedia.startsWith("data:video/")) {
+        const parts = targetMedia.split(";base64,");
+        const mimeType = parts[0].replace("data:", "") || "video/mp4";
+        const base64Data = parts[1];
+        const buffer = Buffer.from(base64Data, "base64");
+        const blob = new Blob([buffer], { type: mimeType });
+
+        const formData = new FormData();
+        formData.append("source", blob, "uploaded-post-video.mp4");
+        formData.append("description", message || "");
+        formData.append("access_token", cleanToken);
+
+        const fbVideoUrl = `https://graph.facebook.com/v19.0/${cleanPageId}/videos`;
+        fbRes = await fetch(fbVideoUrl, {
+          method: "POST",
+          body: formData,
+        });
+      } else {
+        // Public Video URL
+        const fbVideoUrl = `https://graph.facebook.com/v19.0/${cleanPageId}/videos`;
+        fbRes = await fetch(fbVideoUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            file_url: targetMedia,
+            description: message || "",
+            access_token: cleanToken,
+          }),
+        });
+      }
+    }
+    // Case 3: Public HTTP/HTTPS Image URL
+    else if (targetMedia && typeof targetMedia === "string" && (targetMedia.startsWith("http://") || targetMedia.startsWith("https://"))) {
       const fbPhotoUrl = `https://graph.facebook.com/v19.0/${cleanPageId}/photos`;
       fbRes = await fetch(fbPhotoUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          url: imageUrl,
+          url: targetMedia,
           caption: message || "",
           access_token: cleanToken,
         }),
       });
-    } else {
-      // Publish as Feed Post (Text + Link)
+    }
+    // Case 4: Text-only Feed Post
+    else {
       const fbFeedUrl = `https://graph.facebook.com/v19.0/${cleanPageId}/feed`;
       const bodyPayload: any = {
         message: message || "",
@@ -1112,7 +1186,7 @@ app.post("/api/facebook/publish-post", async (req: Request, res: Response) => {
       success: true,
       postId,
       postUrl,
-      message: "تم النشر الحقيقي على صفحة فيسبوك بنجاح!",
+      message: "تم النشر الحقيقي على صفحة فيسبوك بالوسائط بنجاح!",
       publishedAt: new Date().toISOString(),
     });
   } catch (error: any) {

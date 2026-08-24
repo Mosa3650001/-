@@ -146,23 +146,28 @@ export function sanitizeBrand(raw: any): Brand | null {
   };
 }
 
-// Helper to detect old mock/demo IDs
+// Helper to detect old mock/demo IDs (strictly match demo presets, never user-created items)
 export const isDemoId = (id: string | undefined | null): boolean => {
   if (!id || typeof id !== "string") return false;
   return (
-    id.startsWith("brand-bilal-koo") ||
-    id.startsWith("brand-tawfeer-world") ||
-    id.startsWith("brand-al-sarkha") ||
-    id.startsWith("acc-bk-") ||
-    id.startsWith("acc-tw-") ||
-    id.startsWith("acc-as-") ||
-    id.startsWith("post-") ||
-    id.startsWith("idea-") ||
-    id.startsWith("inbox-") ||
+    id === "brand-bilal-koo" ||
+    id === "brand-tawfeer-world" ||
+    id === "brand-al-sarkha" ||
+    id === "acc-bk-1" ||
+    id === "acc-bk-2" ||
+    id === "acc-bk-3" ||
+    id === "acc-tw-1" ||
+    id === "acc-tw-2" ||
+    id === "acc-as-1" ||
+    id === "acc-as-2" ||
     id === "usr-1" ||
     id === "usr-2" ||
     id === "usr-3" ||
-    id === "usr-4"
+    id === "usr-4" ||
+    /^post-[1-9]$/.test(id) ||
+    /^idea-[1-9]$/.test(id) ||
+    /^inbox-[1-9]$/.test(id) ||
+    id === "demo-item"
   );
 };
 

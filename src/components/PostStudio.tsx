@@ -23,9 +23,10 @@ import {
   Share2,
   Play,
   Facebook,
+  Hash,
 } from "lucide-react";
 import confetti from "canvas-confetti";
-import { SocialPlatform, PostFormat, CatalogProduct } from "../types";
+import { SocialPlatform, PostFormat, CatalogProduct, PostStatus } from "../types";
 import { FacebookPagesSyncModal } from "./FacebookPagesSyncModal";
 
 // Common clothing color presets
@@ -46,10 +47,12 @@ export const PostStudio: React.FC = () => {
   const {
     brands,
     currentBrandId,
+    currentUser,
     templates,
     products,
     connectedAccounts,
     createPost,
+    updatePost,
     editingPost,
     setEditingPost,
     addToast,
@@ -119,6 +122,30 @@ export const PostStudio: React.FC = () => {
     if (importedIdeaForStudio?.productImage) return importedIdeaForStudio.productImage;
     return "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=800&auto=format&fit=crop&q=80";
   });
+
+  const [mediaType, setMediaType] = useState<"image" | "video">(() => {
+    if (editingPost?.mediaType) return editingPost.mediaType;
+    const initialUrl = editingPost?.mediaUrls?.[0] || importedIdeaForStudio?.productImage || "";
+    if (initialUrl.startsWith("data:video/") || initialUrl.endsWith(".mp4") || initialUrl.endsWith(".mov")) {
+      return "video";
+    }
+    return "image";
+  });
+
+  const [mediaFileName, setMediaFileName] = useState<string>("");
+  const [newHashtagInput, setNewHashtagInput] = useState<string>("");
+
+  // Helper to clean and format Arabic and Latin hashtags
+  const cleanHashtagsList = (tags: string[]): string[] => {
+    return (tags || [])
+      .map((t) => {
+        if (typeof t !== "string") return "";
+        let clean = t.trim().replace(/^#+/, "").replace(/[,،\.!؟;:|\/]/g, "").trim();
+        clean = clean.replace(/\s+/g, "_");
+        return clean ? `#${clean}` : "";
+      })
+      .filter(Boolean);
+  };
 
   // Visual Template ID
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(() => {
@@ -249,14 +276,15 @@ export const PostStudio: React.FC = () => {
   const handleGenerateAiCopy = async () => {
     setIsGeneratingAi(true);
     try {
-      const brandNames = selectedBrandIds.map((id) => brands.find((b) => b.id === id)?.name || id).join(" و ");
+      // Use primary store name or individual brand to prevent awkward "Store 1 and Store 2" combined headers
+      const brandNameForAi = primaryBrand.name;
       const colorNames = selectedColors.map((c) => c.name).join("، ");
 
       const res = await fetch("/api/ai/generate-post", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          brandName: brandNames,
+          brandName: brandNameForAi,
           brandTone: primaryBrand.toneLabel,
           brandKeywords: primaryBrand.defaultHashtags.join(" "),
           productTitle,
@@ -265,7 +293,7 @@ export const PostStudio: React.FC = () => {
           productDiscount,
           productSizes: selectedSizes,
           targetPlatforms,
-          customInstructions: `${customInstructions}. الألوان المتوفرة: ${colorNames}`,
+          customInstructions: `${customInstructions}. الألوان المتوفرة: ${colorNames}. اكتب المحتوى بأسلوب راقٍ جذاب مع هاشتاجات منظمة ونظيفة بدون رموز مكررة.`,
           format,
           imageDescription: `${productTitle} - ألوان ${colorNames} - فئة ${productCategory}`,
         }),
@@ -277,15 +305,15 @@ export const PostStudio: React.FC = () => {
         const merged: any = { ...platformContents };
         Object.entries(data.captions).forEach(([plat, content]: [string, any]) => {
           if (content && content.caption) {
-            // Include colors if not present
             let captionText = content.caption;
             if (!captionText.includes("الألوان") && colorNames) {
               captionText += `\n🎨 الألوان المتوفرة: ${colorNames}`;
             }
+            const cleanTags = cleanHashtagsList(content.hashtags || []);
             merged[plat] = {
               caption: captionText,
               hook: content.hook || "",
-              hashtags: content.hashtags || [],
+              hashtags: cleanTags.length > 0 ? cleanTags : ["#أزياء", "#عروض_خاصة", "#تسوق_اونلاين"],
               callToAction: content.callToAction || "",
             };
           }
@@ -371,24 +399,26 @@ export const PostStudio: React.FC = () => {
     const contentPerPlatform: any = {};
     targetPlatforms.forEach((p) => {
       const c = platformContents[p] || platformContents.instagram;
+      const cleanTags = cleanHashtagsList(c.hashtags || []);
       contentPerPlatform[p] = {
         format,
         caption: c.caption,
         hook: c.hook,
-        hashtags: c.hashtags,
+        hashtags: cleanTags.length > 0 ? cleanTags : ["#أزياء", "#عروض_خاصة"],
         callToAction: c.callToAction,
         mediaUrl: selectedImage,
+        mediaType,
       };
     });
 
-    const status = asDraft ? "draft" : publishMode === "instant" ? "published" : "scheduled";
+    const status: PostStatus = asDraft ? "draft" : publishMode === "instant" ? "published" : "scheduled";
 
     // If instant publish and targeting Facebook, check if connected accounts have live tokens
     if (!asDraft && (publishMode === "instant" || publishMode === "schedule") && targetPlatforms.includes("facebook")) {
       let fbAccounts = connectedAccounts.filter(
         (acc) =>
           acc.platform === "facebook" &&
-          (selectedBrandIds.includes(acc.brandId) || (acc as any).connected_store_id && selectedBrandIds.includes((acc as any).connected_store_id)) &&
+          (selectedBrandIds.includes(acc.brandId) || ((acc as any).connected_store_id && selectedBrandIds.includes((acc as any).connected_store_id))) &&
           acc.apiToken &&
           acc.apiToken.length > 15 &&
           (acc.pageId || acc.accountId)
@@ -441,7 +471,8 @@ export const PostStudio: React.FC = () => {
 
       if (publishMode === "instant" && fbAccounts.length > 0) {
         const fbContent = contentPerPlatform.facebook || platformContents.facebook;
-        const fullMessage = `${fbContent.hook ? fbContent.hook + "\n\n" : ""}${fbContent.caption}\n\n${(fbContent.hashtags || []).join(" ")}\n\n${fbContent.callToAction || ""}`;
+        const cleanTags = cleanHashtagsList(fbContent.hashtags || []);
+        const fullMessage = `${fbContent.hook ? fbContent.hook + "\n\n" : ""}${fbContent.caption}\n\n${cleanTags.join(" ")}\n\n${fbContent.callToAction || ""}`;
 
         for (const fbAccount of fbAccounts) {
           try {
@@ -453,6 +484,8 @@ export const PostStudio: React.FC = () => {
                 pageAccessToken: fbAccount.apiToken,
                 message: fullMessage.trim(),
                 imageUrl: selectedImage,
+                mediaUrl: selectedImage,
+                mediaType,
               }),
             });
             const fbData = await fbRes.json();
@@ -483,13 +516,14 @@ export const PostStudio: React.FC = () => {
       }
     }
 
-    createPost({
+    const postPayload = {
       title: productTitle,
       brandId: selectedBrandIds[0],
       targetBrandIds: selectedBrandIds,
       targetPlatforms,
       contentPerPlatform,
       mediaUrls: [selectedImage],
+      mediaType,
       templateId: selectedTemplateId,
       productPrice: Number(productPrice) || 0,
       productDiscount: Number(productDiscount) || 0,
@@ -499,10 +533,21 @@ export const PostStudio: React.FC = () => {
       status,
       scheduledAt: publishMode === "instant" ? new Date().toISOString() : new Date(scheduledDateTime).toISOString(),
       publishedAt: publishMode === "instant" ? new Date().toISOString() : undefined,
-      createdBy: "usr-1",
-      createdByName: "المدير العام",
+      createdBy: currentUser?.id || "usr-1",
+      createdByName: currentUser?.name || "المدير العام",
       isAiGenerated: true,
-    });
+    };
+
+    if (editingPost && editingPost.id) {
+      updatePost(editingPost.id, postPayload);
+      addToast({
+        type: "success",
+        title: "✅ تم حفظ تعديلات المنشور المجدول بنجاح!",
+        description: `الموعد: ${new Date(postPayload.scheduledAt).toLocaleString("ar-SA")}`,
+      });
+    } else {
+      createPost(postPayload);
+    }
 
     confetti({
       particleCount: 100,
@@ -763,35 +808,83 @@ export const PostStudio: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">صورة القطعة (أو ارفع من جهازك):</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    ملف الوسائط (صورة 📸 أو فيديو 🎬):
+                  </label>
+                  <div className="flex items-center gap-1 text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setMediaType("image")}
+                      className={`px-2 py-0.5 rounded-md font-bold transition ${
+                        mediaType === "image"
+                          ? "bg-indigo-600 text-white"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                      }`}
+                    >
+                      صورة
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMediaType("video")}
+                      className={`px-2 py-0.5 rounded-md font-bold transition ${
+                        mediaType === "video"
+                          ? "bg-purple-600 text-white"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                      }`}
+                    >
+                      فيديو / ريلز
+                    </button>
+                  </div>
+                </div>
+
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    value={selectedImage}
-                    onChange={(e) => setSelectedImage(e.target.value)}
+                    value={selectedImage.startsWith("data:") ? `ملف مرفوع محلياً (${mediaType === "video" ? "🎬 فيديو" : "📸 صورة"})` : selectedImage}
+                    onChange={(e) => {
+                      setSelectedImage(e.target.value);
+                      if (e.target.value.includes(".mp4") || e.target.value.includes(".mov")) {
+                        setMediaType("video");
+                      }
+                    }}
                     className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-indigo-500 font-mono"
-                    placeholder="https://..."
+                    placeholder="رابط مباشر https:// أو ارفع من جهازك..."
                   />
                   <label
-                    className="px-3.5 py-2.5 rounded-xl bg-indigo-50 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-slate-700 border border-indigo-200 dark:border-slate-700 cursor-pointer text-indigo-600 dark:text-slate-200 flex items-center justify-center transition"
-                    title="رفع صورة من الجهاز"
+                    className={`px-3.5 py-2.5 rounded-xl border cursor-pointer flex items-center justify-center gap-1.5 transition font-bold text-xs ${
+                      mediaType === "video"
+                        ? "bg-purple-50 dark:bg-purple-950/50 hover:bg-purple-100 border-purple-300 dark:border-purple-800 text-purple-600 dark:text-purple-300"
+                        : "bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 border-indigo-300 dark:border-indigo-800 text-indigo-600 dark:text-indigo-300"
+                    }`}
+                    title="ارفع صورة أو مقطع فيديو من جهازك"
                   >
                     <Upload className="w-4 h-4" />
+                    <span>{mediaType === "video" ? "رفع فيديو" : "رفع صورة"}</span>
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/*,video/mp4,video/quicktime,video/webm,video/*"
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) {
+                          const isVideoFile =
+                            file.type.startsWith("video/") ||
+                            file.name.toLowerCase().endsWith(".mp4") ||
+                            file.name.toLowerCase().endsWith(".mov") ||
+                            file.name.toLowerCase().endsWith(".webm");
+                          
+                          setMediaType(isVideoFile ? "video" : "image");
+                          setMediaFileName(file.name);
+
                           const reader = new FileReader();
                           reader.onload = (event) => {
                             if (event.target?.result) {
                               setSelectedImage(event.target.result as string);
                               addToast({
                                 type: "success",
-                                title: "📸 تم رفع صورة القطعة بنجاح!",
-                                description: `اسم الملف: ${file.name}`,
+                                title: isVideoFile ? "🎬 تم رفع مقطع الفيديو بنجاح!" : "📸 تم رفع صورة القطعة بنجاح!",
+                                description: `الملف: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`,
                               });
                             }
                           };
@@ -1046,25 +1139,185 @@ export const PostStudio: React.FC = () => {
               </div>
 
               {/* Editable Text Area for current platform */}
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                  <span>النص المخصص لمنصة ({activePreviewPlatform}):</span>
-                  <span>{currentContent.caption?.length || 0} حرف</span>
+                  <span className="font-bold text-slate-700 dark:text-slate-300">
+                    النص والهاشتاجات المخصصة لمنصة ({activePreviewPlatform === "instagram" ? "إنستغرام" : activePreviewPlatform === "tiktok" ? "تيك توك" : activePreviewPlatform === "whatsapp" ? "واتساب" : "فيسبوك"}):
+                  </span>
+                  <span className="font-mono">{currentContent.caption?.length || 0} حرف</span>
                 </div>
-                <textarea
-                  rows={4}
-                  value={currentContent.caption || ""}
-                  onChange={(e) => {
-                    setPlatformContents({
-                      ...platformContents,
-                      [activePreviewPlatform]: {
-                        ...currentContent,
-                        caption: e.target.value,
-                      },
-                    });
-                  }}
-                  className="w-full p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-indigo-500 leading-relaxed font-sans"
-                />
+
+                {/* Opening Hook */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 block">
+                    السطر الافتتاحي الجذاب (Hook):
+                  </label>
+                  <input
+                    type="text"
+                    value={currentContent.hook || ""}
+                    onChange={(e) => {
+                      setPlatformContents({
+                        ...platformContents,
+                        [activePreviewPlatform]: {
+                          ...currentContent,
+                          hook: e.target.value,
+                        },
+                      });
+                    }}
+                    placeholder="مثال: أناقتك في الصيف تبدأ من هنا ✨"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                {/* Caption Body */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 block">
+                    نص المنشور الأساسي:
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={currentContent.caption || ""}
+                    onChange={(e) => {
+                      setPlatformContents({
+                        ...platformContents,
+                        [activePreviewPlatform]: {
+                          ...currentContent,
+                          caption: e.target.value,
+                        },
+                      });
+                    }}
+                    className="w-full p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-indigo-500 leading-relaxed font-sans"
+                  />
+                </div>
+
+                {/* Hashtags Management System */}
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <Hash className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                      <span>الهاشتاجات المنظمة ({currentContent.hashtags?.length || 0}):</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cleaned = cleanHashtagsList(currentContent.hashtags || []);
+                        setPlatformContents({
+                          ...platformContents,
+                          [activePreviewPlatform]: {
+                            ...currentContent,
+                            hashtags: cleaned,
+                          },
+                        });
+                        addToast({ type: "success", title: "✨ تم تنظيف وترتيب الهاشتاجات بنجاح" });
+                      }}
+                      className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline"
+                    >
+                      ✨ إعادة تنسيق الهاشتاجات
+                    </button>
+                  </div>
+
+                  {/* Hashtags Chips */}
+                  <div className="flex flex-wrap gap-1.5 min-h-[30px] p-1.5 rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800">
+                    {(currentContent.hashtags && currentContent.hashtags.length > 0) ? (
+                      currentContent.hashtags.map((tag, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-mono font-bold"
+                        >
+                          <span>{tag.startsWith("#") ? tag : `#${tag}`}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = currentContent.hashtags?.filter((_, i) => i !== idx) || [];
+                              setPlatformContents({
+                                ...platformContents,
+                                [activePreviewPlatform]: {
+                                  ...currentContent,
+                                  hashtags: updated,
+                                },
+                              });
+                            }}
+                            className="text-slate-400 hover:text-rose-500 font-bold text-sm leading-none"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-[11px] text-slate-400 p-1">لا توجد هاشتاجات مضافة حتى الآن</span>
+                    )}
+                  </div>
+
+                  {/* Add Hashtag Input */}
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={newHashtagInput}
+                      onChange={(e) => setNewHashtagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (!newHashtagInput.trim()) return;
+                          const tagsToAdd = cleanHashtagsList(newHashtagInput.split(/[\s,،]+/));
+                          const currentTags = currentContent.hashtags || [];
+                          const merged = Array.from(new Set([...currentTags, ...tagsToAdd]));
+                          setPlatformContents({
+                            ...platformContents,
+                            [activePreviewPlatform]: {
+                              ...currentContent,
+                              hashtags: merged,
+                            },
+                          });
+                          setNewHashtagInput("");
+                        }
+                      }}
+                      placeholder="أضف هاشتاق واضغط Enter (مثال: أزياء_2026)..."
+                      className="flex-1 px-3 py-1.5 rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-indigo-500 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!newHashtagInput.trim()) return;
+                        const tagsToAdd = cleanHashtagsList(newHashtagInput.split(/[\s,،]+/));
+                        const currentTags = currentContent.hashtags || [];
+                        const merged = Array.from(new Set([...currentTags, ...tagsToAdd]));
+                        setPlatformContents({
+                          ...platformContents,
+                          [activePreviewPlatform]: {
+                            ...currentContent,
+                            hashtags: merged,
+                          },
+                        });
+                        setNewHashtagInput("");
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-300 dark:hover:bg-slate-700 transition"
+                    >
+                      إضافة
+                    </button>
+                  </div>
+                </div>
+
+                {/* Call to Action */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 block">
+                    الدعوة لاتخاذ إجراء (Call to Action):
+                  </label>
+                  <input
+                    type="text"
+                    value={currentContent.callToAction || ""}
+                    onChange={(e) => {
+                      setPlatformContents({
+                        ...platformContents,
+                        [activePreviewPlatform]: {
+                          ...currentContent,
+                          callToAction: e.target.value,
+                        },
+                      });
+                    }}
+                    placeholder="مثال: راسلنا على الخاص أو الواتساب لحجز مقاسك فوراً 💬"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -1211,34 +1464,42 @@ export const PostStudio: React.FC = () => {
                   <span className="text-slate-400 text-xs">•••</span>
                 </div>
 
-                {/* Framed Image with Live Visual Template Overlay */}
+                {/* Framed Image/Video with Live Visual Template Overlay */}
                 <div className="relative rounded-2xl overflow-hidden aspect-square bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm group">
-                  <img
-                    src={selectedImage}
-                    alt={productTitle}
-                    className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
-                  />
+                  {mediaType === "video" || selectedImage.startsWith("data:video/") || selectedImage.endsWith(".mp4") || selectedImage.endsWith(".mov") ? (
+                    <video
+                      src={selectedImage}
+                      controls
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <img
+                      src={selectedImage}
+                      alt={productTitle}
+                      className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                    />
+                  )}
 
                   {/* Brand Watermark / Top Ribbon */}
-                  <div className="absolute top-2.5 left-2.5 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/70 backdrop-blur-md text-white border border-white/20 text-[10px] font-bold">
+                  <div className="absolute top-2.5 left-2.5 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/70 backdrop-blur-md text-white border border-white/20 text-[10px] font-bold pointer-events-none">
                     <img src={primaryBrand.logo} alt="" className="w-3.5 h-3.5 rounded-full object-cover" />
                     <span>{primaryBrand.name}</span>
                   </div>
 
                   {/* Template Badge Overlay (e.g. Weekend Special, New Arrival, Discount) */}
-                  <div className="absolute top-2.5 right-2.5 z-10">
+                  <div className="absolute top-2.5 right-2.5 z-10 pointer-events-none">
                     <div
                       className="px-3 py-1 rounded-full text-[11px] font-black text-white shadow-lg backdrop-blur-md flex items-center gap-1.5 animate-in fade-in zoom-in-95 duration-200"
                       style={{ backgroundColor: selectedTemplate.accentColor }}
                     >
                       <Sparkles className="w-3 h-3" />
-                      <span>{selectedTemplate.badgeText}</span>
+                      <span>{mediaType === "video" ? "🎬 فيديو حصري" : selectedTemplate.badgeText}</span>
                     </div>
                   </div>
 
                   {/* Price Tag Overlay */}
                   {productPrice && (
-                    <div className="absolute bottom-2.5 left-2.5 z-10">
+                    <div className="absolute bottom-2.5 left-2.5 z-10 pointer-events-none">
                       <div className="px-3 py-1.5 rounded-xl bg-slate-950/85 backdrop-blur-md border border-white/20 text-white font-mono text-xs font-black shadow-lg flex items-center gap-1.5">
                         <span className="text-amber-300">{productPrice} ريال</span>
                         {productDiscount ? (
@@ -1251,7 +1512,7 @@ export const PostStudio: React.FC = () => {
                   )}
 
                   {/* Available Colors and Sizes Chips */}
-                  <div className="absolute bottom-2.5 right-2.5 z-10 flex flex-col items-end gap-1">
+                  <div className="absolute bottom-2.5 right-2.5 z-10 flex flex-col items-end gap-1 pointer-events-none">
                     {/* Colors circles */}
                     {selectedColors.length > 0 && (
                       <div className="flex items-center gap-1 p-1 rounded-lg bg-black/60 backdrop-blur-xs border border-white/10">

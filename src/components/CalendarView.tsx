@@ -47,10 +47,11 @@ export const CalendarView: React.FC = () => {
 
   // Filter posts
   const filteredPosts = posts.filter((post) => {
-    if (currentBrandId !== "all" && !post.targetBrandIds.includes(currentBrandId) && post.brandId !== currentBrandId) {
+    const brandIds = post.targetBrandIds || (post.brandId ? [post.brandId] : []);
+    if (currentBrandId !== "all" && !brandIds.includes(currentBrandId) && post.brandId !== currentBrandId) {
       return false;
     }
-    if (selectedPlatform !== "all" && !post.targetPlatforms.includes(selectedPlatform as SocialPlatform)) {
+    if (selectedPlatform !== "all" && !(post.targetPlatforms || []).includes(selectedPlatform as SocialPlatform)) {
       return false;
     }
     if (selectedStatus !== "all" && post.status !== selectedStatus) {
