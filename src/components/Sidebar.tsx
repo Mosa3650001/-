@@ -15,6 +15,10 @@ import {
   Info,
   ShieldCheck,
   Trash2,
+  Coins,
+  Activity,
+  FileSpreadsheet,
+  Repeat,
 } from "lucide-react";
 import { AppLogo } from "./AppLogo";
 
@@ -28,6 +32,11 @@ export const Sidebar: React.FC = () => {
     connectedAccounts,
     sidebarOpen,
     setSidebarOpen,
+    setAiCreditsModalOpen,
+    setTokenHealthModalOpen,
+    setBulkImportModalOpen,
+    setEvergreenModalOpen,
+    aiWallet,
   } = useApp();
 
   const pendingInboxCount = inboxItems.filter((i) => i.status === "pending").length;
@@ -186,6 +195,81 @@ export const Sidebar: React.FC = () => {
               </button>
             );
           })}
+
+          <div className="pt-3 pb-1">
+            <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-t border-slate-100 dark:border-slate-800/80">
+              أدوات النمو المتقدمة
+            </div>
+          </div>
+
+          {/* Quick SaaS Tools */}
+          <button
+            type="button"
+            onClick={() => {
+              setAiCreditsModalOpen(true);
+              setSidebarOpen(false);
+            }}
+            className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl font-bold text-xs text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition text-right"
+          >
+            <div className="flex items-center gap-2.5">
+              <Coins className="w-4 h-4 text-amber-500" />
+              <span>محفظة الذكاء الاصطناعي</span>
+            </div>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/60 font-mono font-bold">
+              {aiWallet.balance ?? (aiWallet.totalCredits - aiWallet.usedCredits)} pt
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setTokenHealthModalOpen(true);
+              setSidebarOpen(false);
+            }}
+            className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl font-bold text-xs text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition text-right"
+          >
+            <div className="flex items-center gap-2.5">
+              <Activity className="w-4 h-4 text-emerald-500" />
+              <span>مراقب صحة التوكنات</span>
+            </div>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 font-bold">
+              سليم 100%
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setBulkImportModalOpen(true);
+              setSidebarOpen(false);
+            }}
+            className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl font-bold text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-right"
+          >
+            <div className="flex items-center gap-2.5">
+              <FileSpreadsheet className="w-4 h-4 text-indigo-500" />
+              <span>استيراد جماعي CSV</span>
+            </div>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-bold">
+              Bulk
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setEvergreenModalOpen(true);
+              setSidebarOpen(false);
+            }}
+            className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl font-bold text-xs text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/30 transition text-right"
+          >
+            <div className="flex items-center gap-2.5">
+              <Repeat className="w-4 h-4 text-purple-500" />
+              <span>إعادة تدوير Evergreen</span>
+            </div>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 font-bold">
+              Auto
+            </span>
+          </button>
 
           <div className="pt-3 pb-1">
             <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-t border-slate-100 dark:border-slate-800/80">

@@ -20,8 +20,11 @@ import {
   Video,
   Image as ImageIcon,
   Check,
+  FileSpreadsheet,
+  Repeat,
+  Smartphone,
 } from "lucide-react";
-import { Post, SocialPlatform } from "../types";
+import { Post, SocialPlatform, ApprovalStatus, ContentPillar } from "../types";
 
 export const CalendarView: React.FC = () => {
   const {
@@ -35,11 +38,16 @@ export const CalendarView: React.FC = () => {
     setActiveTab,
     addToast,
     updatePost,
+    setBulkImportModalOpen,
+    setEvergreenModalOpen,
+    setClientReviewPost,
   } = useApp();
 
   const [viewMode, setViewMode] = useState<"month" | "week" | "list">("month");
   const [selectedPlatform, setSelectedPlatform] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [selectedApprovalStatus, setSelectedApprovalStatus] = useState<string>("all");
+  const [selectedPillar, setSelectedPillar] = useState<string>("all");
 
   // In-calendar fast rescheduling modal state
   const [selectedPostForQuickEdit, setSelectedPostForQuickEdit] = useState<Post | null>(null);
@@ -55,6 +63,12 @@ export const CalendarView: React.FC = () => {
       return false;
     }
     if (selectedStatus !== "all" && post.status !== selectedStatus) {
+      return false;
+    }
+    if (selectedApprovalStatus !== "all" && (post.approvalStatus || "approved") !== selectedApprovalStatus) {
+      return false;
+    }
+    if (selectedPillar !== "all" && (post.contentPillar || "products") !== selectedPillar) {
       return false;
     }
     return true;
@@ -112,7 +126,7 @@ export const CalendarView: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
             {/* View Mode Switcher */}
             <div className="flex items-center p-1 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
               <button
@@ -143,6 +157,24 @@ export const CalendarView: React.FC = () => {
                 قائمة مفصلة
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setBulkImportModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5 border border-slate-200 dark:border-slate-700"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" />
+              <span>استيراد ملف CSV</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setEvergreenModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-purple-50 dark:bg-purple-900/30 hover:bg-purple-100 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-xs font-bold transition flex items-center gap-1.5 border border-purple-200 dark:border-purple-700"
+            >
+              <Repeat className="w-3.5 h-3.5 text-purple-500" />
+              <span>إعادة تدوير Evergreen</span>
+            </button>
 
             <button
               type="button"
@@ -204,6 +236,31 @@ export const CalendarView: React.FC = () => {
               <option value="scheduled">⏰ مجدول فقط</option>
               <option value="published">✅ تم النشر</option>
               <option value="draft">📝 مسودات</option>
+            </select>
+
+            {/* Approval Workflow Filter */}
+            <select
+              value={selectedApprovalStatus}
+              onChange={(e) => setSelectedApprovalStatus(e.target.value)}
+              className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white text-xs font-semibold focus:outline-none"
+            >
+              <option value="all">🛡️ جميع حالات الاعتماد</option>
+              <option value="approved">✅ معتمد (Approved)</option>
+              <option value="pending_review">⏳ بانتظار موافقة العميل</option>
+              <option value="draft">📝 مسودة</option>
+            </select>
+
+            {/* Content Pillar Filter */}
+            <select
+              value={selectedPillar}
+              onChange={(e) => setSelectedPillar(e.target.value)}
+              className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white text-xs font-semibold focus:outline-none"
+            >
+              <option value="all">📊 جميع أعمدة المحتوى</option>
+              <option value="products">🛍️ المنتجات</option>
+              <option value="offers">🏷️ العروض والتخفيضات</option>
+              <option value="engagement">💬 التفاعل والأسئلة</option>
+              <option value="educational">📚 التثقيفي والتنسيقات</option>
             </select>
           </div>
 
@@ -381,6 +438,30 @@ export const CalendarView: React.FC = () => {
                             {isPublished ? "✅ منشور" : isScheduled ? "⏰ مجدول" : "📝 مسودة"}
                           </span>
 
+                          {/* Approval Status Badge */}
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              post.approvalStatus === "pending_review"
+                                ? "bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700"
+                                : "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700"
+                            }`}
+                          >
+                            {post.approvalStatus === "pending_review" ? "⏳ بانتظار العميل" : "✅ معتمد"}
+                          </span>
+
+                          {/* Content Pillar Badge */}
+                          {post.contentPillar && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300">
+                              {post.contentPillar === "products"
+                                ? "🛍️ منتجات"
+                                : post.contentPillar === "offers"
+                                ? "🏷️ عروض"
+                                : post.contentPillar === "engagement"
+                                ? "💬 تفاعل"
+                                : "📚 تثقيفي"}
+                            </span>
+                          )}
+
                           <span className="text-xs text-slate-500 dark:text-slate-400 font-mono flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5" />
                             <span>
@@ -412,7 +493,17 @@ export const CalendarView: React.FC = () => {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-2 self-end md:self-center">
+                    <div className="flex items-center gap-2 self-end md:self-center flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setClientReviewPost(post)}
+                        className="px-2.5 py-2 rounded-xl bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 dark:hover:bg-purple-900 border border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300 text-xs font-bold transition flex items-center gap-1"
+                        title="معاينة رابط مراجعة العميل"
+                      >
+                        <Smartphone className="w-3.5 h-3.5" />
+                        <span>مراجعة العميل</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => openQuickEdit(post)}

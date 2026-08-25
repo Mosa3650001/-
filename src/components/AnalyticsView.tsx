@@ -16,8 +16,12 @@ import {
   Filter,
   CheckCircle2,
   Calendar,
+  Zap,
+  Activity,
+  Coins,
 } from "lucide-react";
 import { AIContentAnalysisCard } from "./AIContentAnalysisCard";
+import { ContentPillarsWidget } from "./ContentPillarsWidget";
 
 export const AnalyticsView: React.FC = () => {
   const {
@@ -27,6 +31,9 @@ export const AnalyticsView: React.FC = () => {
     selectedBrand,
     posts,
     connectedAccounts,
+    setAiCreditsModalOpen,
+    setTokenHealthModalOpen,
+    aiWallet,
   } = useApp();
 
   const [timeRange, setTimeRange] = useState<"today" | "7d" | "30d" | "quarter" | "custom">("30d");
@@ -99,6 +106,24 @@ export const AnalyticsView: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setAiCreditsModalOpen(true)}
+              className="px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900 border border-amber-200 dark:border-amber-700 text-amber-800 dark:text-amber-300 text-xs font-bold transition flex items-center gap-1.5"
+            >
+              <Coins className="w-3.5 h-3.5 text-amber-500" />
+              <span>محفظة الذكاء الاصطناعي ({aiWallet.balance ?? (aiWallet.totalCredits - aiWallet.usedCredits)} نقطة)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTokenHealthModalOpen(true)}
+              className="px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900 border border-emerald-200 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 text-xs font-bold transition flex items-center gap-1.5"
+            >
+              <Activity className="w-3.5 h-3.5 text-emerald-500" />
+              <span>مراقب صحة التوكنات</span>
+            </button>
+
             {/* Store Filter */}
             <select
               value={currentBrandId}
@@ -193,12 +218,15 @@ export const AnalyticsView: React.FC = () => {
         )}
       </div>
 
-      {/* AI Content Analysis & Best Posting Times Engine */}
-      <AIContentAnalysisCard
-        currentBrand={selectedBrand}
-        timeRange={timeRange}
-        postsCount={publishedPosts.length}
-      />
+      {/* Content Pillars Strategy Matrix & AI Content Analysis */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ContentPillarsWidget />
+        <AIContentAnalysisCard
+          currentBrand={selectedBrand}
+          timeRange={timeRange}
+          postsCount={publishedPosts.length}
+        />
+      </div>
 
       {/* Main KPI Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -12,6 +12,8 @@ import {
   ContentIdea,
   DailyPublishGoal,
   ContentStage,
+  AiCreditWallet,
+  ApprovalStatus,
 } from "../types";
 import {
   INITIAL_BRANDS,
@@ -83,9 +85,28 @@ interface AppContextType {
 
   // Post Actions
   createPost: (post: Omit<Post, "id" | "createdAt">) => Post;
+  bulkCreatePosts: (postsList: Omit<Post, "id" | "createdAt">[]) => Post[];
   updatePost: (id: string, updates: Partial<Post>) => void;
+  updatePostApprovalStatus: (id: string, status: ApprovalStatus, feedback?: string) => void;
   deletePost: (id: string) => void;
   publishPostNow: (id: string) => void;
+
+  // AI Wallet & Cost Shield
+  aiWallet: AiCreditWallet;
+  deductAiCredits: (amount: number, action: string, model?: string) => boolean;
+  addAiCredits: (amount: number) => void;
+
+  // Modals & Panels
+  tokenHealthModalOpen: boolean;
+  setTokenHealthModalOpen: (open: boolean) => void;
+  aiCreditsModalOpen: boolean;
+  setAiCreditsModalOpen: (open: boolean) => void;
+  bulkImportModalOpen: boolean;
+  setBulkImportModalOpen: (open: boolean) => void;
+  evergreenModalOpen: boolean;
+  setEvergreenModalOpen: (open: boolean) => void;
+  clientReviewPost: Post | null;
+  setClientReviewPost: (post: Post | null) => void;
 
   // Inbox Actions
   replyToInbox: (id: string, replyText: string, isAuto?: boolean) => void;
@@ -143,6 +164,39 @@ const STORAGE_KEYS = {
   CURRENT_BRAND: "socialhub_cur_brand_v1",
   IDEAS: "socialhub_ideas_v1",
   GOALS: "socialhub_goals_v1",
+  AI_WALLET: "socialhub_ai_wallet_v1",
+};
+
+const DEFAULT_AI_WALLET: AiCreditWallet = {
+  balance: 858,
+  totalCredits: 1000,
+  usedCredits: 142,
+  tier: "pro",
+  tierLabel: "الباقة الاحترافية غير المحدودة (Pro)",
+  dailyResetDate: new Date().toISOString(),
+  history: [
+    {
+      id: "tx_1",
+      action: "صياغة منشورات متعددة المنصات",
+      credits: 2,
+      timestamp: new Date(Date.now() - 3600000).toISOString(),
+      model: "gemini-3.7-flash",
+    },
+    {
+      id: "tx_2",
+      action: "تحليل المحتوى وتوليد الخطة",
+      credits: 3,
+      timestamp: new Date(Date.now() - 7200000).toISOString(),
+      model: "gemini-3.7-flash",
+    },
+    {
+      id: "tx_3",
+      action: "توليد سكريبت ريلز وسيناريو تصوير",
+      credits: 5,
+      timestamp: new Date(Date.now() - 86400000).toISOString(),
+      model: "gemini-3.7-flash",
+    },
+  ],
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -264,6 +318,86 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isCloudSynced, setIsCloudSynced] = useState(false);
+
+  // New Modals State
+  const [tokenHealthModalOpen, setTokenHealthModalOpen] = useState(false);
+  const [aiCreditsModalOpen, setAiCreditsModalOpen] = useState(false);
+  const [bulkImportModalOpen, setBulkImportModalOpen] = useState(false);
+  const [evergreenModalOpen, setEvergreenModalOpen] = useState(false);
+  const [clientReviewPost, setClientReviewPost] = useState<Post | null>(null);
+
+  // AI Credit Wallet State
+  const [aiWallet, setAiWallet] = useState<AiCreditWallet>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.AI_WALLET);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          ...parsed,
+          balance: parsed.balance ?? (parsed.totalCredits - parsed.usedCredits),
+        };
+      }
+    } catch {
+      // fallback
+    }
+    return DEFAULT_AI_WALLET;
+  });
+
+  const deductAiCredits = (amount: number, action: string, model: string = "gemini-3.7-flash"): boolean => {
+    if (aiWallet.usedCredits + amount > aiWallet.totalCredits) {
+      addToast({
+        type: "warning",
+        title: "⚠️ رصيد الذكاء الاصطناعي قارب على النفاد",
+        description: "يرجى شحن الرصيد أو ترقية الباقة لضمان استمرار عمليات التوليد الآلي.",
+      });
+      return false;
+    }
+
+    const newUsed = aiWallet.usedCredits + amount;
+    const updated: AiCreditWallet = {
+      ...aiWallet,
+      usedCredits: newUsed,
+      balance: Math.max(0, aiWallet.totalCredits - newUsed),
+      history: [
+        {
+          id: `tx_${Date.now()}`,
+          action,
+          credits: amount,
+          timestamp: new Date().toISOString(),
+          model,
+        },
+        ...aiWallet.history.slice(0, 29),
+      ],
+    };
+
+    setAiWallet(updated);
+    try {
+      localStorage.setItem(STORAGE_KEYS.AI_WALLET, JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+    return true;
+  };
+
+  const addAiCredits = (amount: number) => {
+    const newTotal = aiWallet.totalCredits + amount;
+    const updated: AiCreditWallet = {
+      ...aiWallet,
+      totalCredits: newTotal,
+      balance: newTotal - aiWallet.usedCredits,
+    };
+    setAiWallet(updated);
+    try {
+      localStorage.setItem(STORAGE_KEYS.AI_WALLET, JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+    addToast({
+      type: "success",
+      title: `⚡ تم شحن ${amount} نقطة ذكاء اصطناعي بنجاح!`,
+      description: `الرصيد المتاح الآن: ${updated.balance} نقطة`,
+    });
+  };
 
   const toggleSidebar = () => {
     setSidebarOpen((prev) => !prev);
@@ -607,6 +741,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       description: `المشروع: ${(newPost.targetBrandIds || [newPost.brandId]).map(id => brands.find(b => b.id === id)?.name || id).join("، ")}`,
     });
     return newPost;
+  };
+
+  const bulkCreatePosts = (postsList: Omit<Post, "id" | "createdAt">[]): Post[] => {
+    const created: Post[] = postsList.map((p, idx) => ({
+      ...p,
+      id: `post_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
+      createdAt: new Date().toISOString(),
+      createdBy: currentUser.id,
+      createdByName: currentUser.name,
+      stats: { views: 0, likes: 0, comments: 0, shares: 0, clicks: 0 },
+    }));
+
+    setPosts((prev) => [...created, ...prev]);
+    created.forEach((post) => {
+      saveDocument(COLLECTIONS.POSTS, post.id, post);
+    });
+
+    addToast({
+      type: "success",
+      title: `🚀 تم استيراد وجدولة ${created.length} منشور بنجاح!`,
+      description: "تمت إضافة المنشورات إلى التقويم وجدول النشر مع المزامنة السحابية.",
+    });
+
+    return created;
+  };
+
+  const updatePostApprovalStatus = (id: string, approvalStatus: ApprovalStatus, feedback?: string) => {
+    const post = posts.find((p) => p.id === id);
+    if (!post) return;
+
+    const updates: Partial<Post> = {
+      approvalStatus,
+      approvalFeedback: feedback || post.approvalFeedback,
+      approvalReviewedBy: currentUser.name,
+      approvalReviewedAt: new Date().toISOString(),
+      status: approvalStatus === "approved" ? "scheduled" : post.status,
+    };
+
+    updatePost(id, updates);
+    addToast({
+      type: approvalStatus === "approved" ? "success" : "info",
+      title: approvalStatus === "approved" ? "✅ تمت الموافقة على المنشور وإدراجه في الجدولة!" : "📝 تم تحديث حالة المراجعة وإرسال الملاحظات",
+      description: feedback ? `الملاحظة: ${feedback}` : undefined,
+    });
   };
 
   const updatePost = (id: string, updates: Partial<Post>) => {
@@ -1168,9 +1346,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addToast,
         removeToast,
         createPost,
+        bulkCreatePosts,
         updatePost,
+        updatePostApprovalStatus,
         deletePost,
         publishPostNow,
+        aiWallet,
+        deductAiCredits,
+        addAiCredits,
+        tokenHealthModalOpen,
+        setTokenHealthModalOpen,
+        aiCreditsModalOpen,
+        setAiCreditsModalOpen,
+        bulkImportModalOpen,
+        setBulkImportModalOpen,
+        evergreenModalOpen,
+        setEvergreenModalOpen,
+        clientReviewPost,
+        setClientReviewPost,
         replyToInbox,
         deleteInboxItem,
         triggerAutoRepliesForAllPending,

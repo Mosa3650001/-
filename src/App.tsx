@@ -16,6 +16,11 @@ import { PrivacyPolicyView } from "./components/PrivacyPolicyView";
 import { DataDeletionView } from "./components/DataDeletionView";
 import { Footer } from "./components/Footer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { BulkImportModal } from "./components/BulkImportModal";
+import { AiCreditsModal } from "./components/AiCreditsModal";
+import { TokenHealthMonitorModal } from "./components/TokenHealthMonitorModal";
+import { ClientApprovalModal } from "./components/ClientApprovalModal";
+import { EvergreenRecyclerModal } from "./components/EvergreenRecyclerModal";
 import {
   LayoutDashboard,
   Lightbulb,
@@ -123,6 +128,13 @@ const MainLayout: React.FC = () => {
           <span>الردود</span>
         </button>
       </nav>
+
+      {/* Commercial SaaS Modals */}
+      <BulkImportModal />
+      <AiCreditsModal />
+      <TokenHealthMonitorModal />
+      <ClientApprovalModal />
+      <EvergreenRecyclerModal post={null} onClose={() => {}} />
 
       {/* Global Toast Notifications */}
       <Toasts />

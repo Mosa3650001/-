@@ -4,6 +4,58 @@ export type PostFormat = "feed" | "reel" | "story" | "whatsapp_broadcast";
 
 export type PostStatus = "draft" | "scheduled" | "published" | "failed";
 
+export type ApprovalStatus = "approved" | "pending_review" | "changes_requested" | "draft";
+
+export type ContentPillar = "offers" | "products" | "engagement" | "educational" | "bts";
+
+export interface AiCreditWallet {
+  balance: number;
+  totalCredits: number;
+  usedCredits: number;
+  tier: "starter" | "pro" | "agency" | "enterprise";
+  tierLabel: string;
+  dailyResetDate: string;
+  history: {
+    id: string;
+    action: string;
+    credits: number;
+    timestamp: string;
+    model?: string;
+  }[];
+}
+
+export interface TokenHealthStatus {
+  accountId: string;
+  brandId: string;
+  brandName: string;
+  platform: SocialPlatform;
+  accountName: string;
+  handle: string;
+  status: "healthy" | "expiring_soon" | "expired" | "unknown";
+  daysRemaining: number;
+  expiresAt: string;
+  lastCheckedAt: string;
+  canPublish: boolean;
+  recommendation: string;
+}
+
+export interface BulkPostRow {
+  id?: string;
+  title: string;
+  category?: string;
+  price?: number;
+  discount?: number;
+  caption: string;
+  hashtags?: string[];
+  mediaUrl: string;
+  mediaType: "image" | "video";
+  format: PostFormat;
+  platforms: SocialPlatform[];
+  scheduledAt: string;
+  brandId: string;
+  contentPillar: ContentPillar;
+}
+
 export interface Brand {
   id: string;
   name: string;
@@ -122,6 +174,13 @@ export interface Post {
   };
   notes?: string;
   isAiGenerated?: boolean;
+  approvalStatus?: ApprovalStatus;
+  approvalFeedback?: string;
+  approvalReviewedBy?: string;
+  approvalReviewedAt?: string;
+  contentPillar?: ContentPillar;
+  isEvergreen?: boolean;
+  recycledFromPostId?: string;
 }
 
 export interface InboxItem {

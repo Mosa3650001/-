@@ -26,7 +26,7 @@ import {
   Hash,
 } from "lucide-react";
 import confetti from "canvas-confetti";
-import { SocialPlatform, PostFormat, CatalogProduct, PostStatus } from "../types";
+import { SocialPlatform, PostFormat, CatalogProduct, PostStatus, ContentPillar, ApprovalStatus } from "../types";
 import { FacebookPagesSyncModal } from "./FacebookPagesSyncModal";
 
 // Common clothing color presets
@@ -59,7 +59,21 @@ export const PostStudio: React.FC = () => {
     setActiveTab,
     importedIdeaForStudio,
     setImportedIdeaForStudio,
+    deductAiCredits,
+    setClientReviewPost,
+    setAiCreditsModalOpen,
   } = useApp();
+
+  // Content Pillar and Approval Workflow
+  const [contentPillar, setContentPillar] = useState<ContentPillar>(() => {
+    if (editingPost?.contentPillar) return editingPost.contentPillar;
+    return "products";
+  });
+
+  const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus>(() => {
+    if (editingPost?.approvalStatus) return editingPost.approvalStatus;
+    return "approved";
+  });
 
   // Multi-brand selection
   const [selectedBrandIds, setSelectedBrandIds] = useState<string[]>(() => {
@@ -275,6 +289,7 @@ export const PostStudio: React.FC = () => {
   // Call Server-Side Gemini API for Multi-Brand Copywriting
   const handleGenerateAiCopy = async () => {
     setIsGeneratingAi(true);
+    deductAiCredits(2, "صياغة منشورات متعددة المنصات", "gemini-3.7-flash");
     try {
       // Use primary store name or individual brand to prevent awkward "Store 1 and Store 2" combined headers
       const brandNameForAi = primaryBrand.name;
@@ -536,6 +551,8 @@ export const PostStudio: React.FC = () => {
       createdBy: currentUser?.id || "usr-1",
       createdByName: currentUser?.name || "المدير العام",
       isAiGenerated: true,
+      contentPillar,
+      approvalStatus,
     };
 
     if (editingPost && editingPost.id) {
@@ -579,6 +596,56 @@ export const PostStudio: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => {
+              setClientReviewPost({
+                id: editingPost?.id || "temp_preview",
+                title: productTitle,
+                brandId: selectedBrandIds[0],
+                targetBrandIds: selectedBrandIds,
+                targetPlatforms,
+                contentPerPlatform: {
+                  instagram: {
+                    caption: platformContents.instagram?.caption || productTitle,
+                    hashtags: platformContents.instagram?.hashtags || [],
+                    format,
+                  },
+                  tiktok: {
+                    caption: platformContents.tiktok?.caption || productTitle,
+                    hashtags: platformContents.tiktok?.hashtags || [],
+                    format: "reel",
+                  },
+                  facebook: {
+                    caption: platformContents.facebook?.caption || productTitle,
+                    hashtags: platformContents.facebook?.hashtags || [],
+                    format,
+                  },
+                  whatsapp: {
+                    caption: platformContents.whatsapp?.caption || productTitle,
+                    hashtags: [],
+                    format: "whatsapp_broadcast",
+                  },
+                },
+                mediaUrls: [selectedImage],
+                mediaType,
+                productPrice: Number(productPrice) || 0,
+                productDiscount: Number(productDiscount) || 0,
+                status: "scheduled",
+                scheduledAt: scheduledDateTime,
+                approvalStatus,
+                contentPillar,
+                createdBy: currentUser?.id || "user_admin",
+                createdByName: currentUser?.name || "مدير النظام",
+                createdAt: new Date().toISOString(),
+              });
+            }}
+            className="px-3.5 py-2.5 rounded-xl bg-purple-50 dark:bg-purple-900/30 hover:bg-purple-100 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700 text-xs font-bold transition flex items-center gap-1.5"
+          >
+            <Smartphone className="w-3.5 h-3.5" />
+            <span>معاينة العميل (Client Portal)</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setIsFbSyncModalOpen(true)}
@@ -1402,6 +1469,51 @@ export const PostStudio: React.FC = () => {
                 />
               </div>
             )}
+          </div>
+
+          {/* 6. Content Pillar & Approval Workflow */}
+          <div className="p-5 rounded-3xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Layers className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                <span>6. استراتيجية عمود المحتوى ومسار الاعتماد:</span>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Pillar Selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  عمود المحتوى (Content Pillar):
+                </label>
+                <select
+                  value={contentPillar}
+                  onChange={(e: any) => setContentPillar(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:border-purple-500"
+                >
+                  <option value="products">🛍️ استعراض وتفاصيل منتجات (Products)</option>
+                  <option value="offers">🏷️ عروض وتخفيضات موسمية (Offers)</option>
+                  <option value="engagement">💬 تفاعلي وأسئلة واستطلاعات (Engagement)</option>
+                  <option value="educational">📚 تثقيفي وكواليس وتنسيقات (Educational)</option>
+                </select>
+              </div>
+
+              {/* Approval Status Selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  حالة اعتماد ومراجعة المنشور:
+                </label>
+                <select
+                  value={approvalStatus}
+                  onChange={(e: any) => setApprovalStatus(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:border-purple-500"
+                >
+                  <option value="approved">✅ معتمد ومباشر للجدولة (Approved)</option>
+                  <option value="pending_review">⏳ بانتظار مراجعة العميل (Pending Review)</option>
+                  <option value="draft">📝 مسودة قيد التجهيز (Draft)</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
 

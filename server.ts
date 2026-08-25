@@ -27,6 +27,81 @@ function getGenAI(): GoogleGenAI | null {
   });
 }
 
+// Resilient multi-model Gemini execution helper
+// If the primary model experiences high demand (HTTP 503 / UNAVAILABLE), automatically cascades to flash-lite, pro, or flash-latest
+interface ResilientGeminiOptions {
+  contents: any;
+  systemInstruction?: string;
+  responseSchema?: any;
+  responseMimeType?: string;
+  preferredModel?: string;
+}
+
+const SUPPORTED_GEMINI_FALLBACKS = [
+  "gemini-3.7-flash",
+  "gemini-3.1-flash-lite",
+  "gemini-3.1-pro-preview",
+  "gemini-flash-latest",
+];
+
+async function callGeminiWithResilience(options: ResilientGeminiOptions): Promise<{ text: string; modelUsed: string } | null> {
+  const ai = getGenAI();
+  if (!ai) return null;
+
+  const preferred = options.preferredModel || "gemini-3.7-flash";
+  const modelsToTry = [preferred, ...SUPPORTED_GEMINI_FALLBACKS.filter((m) => m !== preferred)];
+
+  let lastError: any = null;
+
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const currentModel = modelsToTry[i];
+    try {
+      const config: any = {};
+      if (options.systemInstruction) {
+        config.systemInstruction = options.systemInstruction;
+      }
+      if (options.responseMimeType) {
+        config.responseMimeType = options.responseMimeType;
+      }
+      if (options.responseSchema) {
+        config.responseSchema = options.responseSchema;
+      }
+
+      const response = await ai.models.generateContent({
+        model: currentModel,
+        contents: options.contents,
+        config,
+      });
+
+      if (response && response.text) {
+        return { text: response.text, modelUsed: currentModel };
+      }
+    } catch (err: any) {
+      lastError = err;
+      const isTransient =
+        err?.status === "UNAVAILABLE" ||
+        err?.code === 503 ||
+        err?.message?.includes("503") ||
+        err?.message?.includes("high demand") ||
+        err?.message?.includes("429") ||
+        err?.message?.includes("ResourceExhausted") ||
+        err?.message?.includes("quota") ||
+        err?.message?.includes("temporarily unavailable") ||
+        err?.message?.includes("overloaded");
+
+      console.warn(
+        `[Gemini Engine] Model ${currentModel} encountered notice: ${err?.message || err}. ${
+          isTransient && i < modelsToTry.length - 1 ? `Switching to fallback model (${modelsToTry[i + 1]})...` : ""
+        }`
+      );
+      // Continue to next fallback model in list
+      continue;
+    }
+  }
+
+  throw lastError || new Error("All Gemini models unavailable");
+}
+
 // Safe JSON parser helper to prevent crashes on markdown fences or malformed output
 function safeParseJson<T = any>(rawText: string | undefined, fallback: T): T {
   if (!rawText || !rawText.trim()) return fallback;
@@ -84,15 +159,14 @@ app.get("/api/ai/test", async (_req: Request, res: Response) => {
   }
 
   try {
-    const testRes = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+    const result = await callGeminiWithResilience({
       contents: "قل مرحباً بجملة ترحيبية واحدة مبهجة لمتجر أزياء باللغة العربية",
     });
     return res.json({
       success: true,
-      mode: "gemini-3.7-flash-active",
-      message: "محرك Google Gemini 3.7 Flash متصل ويعمل بنجاح 100%!",
-      output: testRes.text,
+      mode: `${result?.modelUsed || "gemini"}-active`,
+      message: `محرك Google Gemini (${result?.modelUsed || "3.7 Flash"}) متصل ويعمل بنجاح 100%!`,
+      output: result?.text,
     });
   } catch (err: any) {
     return res.json({
@@ -208,78 +282,75 @@ For each requested platform (${targetPlatforms ? targetPlatforms.join(", ") : "f
 Return strictly valid JSON matching the schema.
 `;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+    const result = await callGeminiWithResilience({
       contents: `Generate multi-platform Arabic social posts for product: ${productTitle}. Ensure each platform tone matches its audience (TikTok is fast & trendy with Reel hooks, WhatsApp is direct & community-focused, Instagram is visual & chic, Facebook is detailed & engaging, YouTube is search-optimized).`,
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            captions: {
-              type: Type.OBJECT,
-              description: "Map of platform name to post content",
-              properties: {
-                facebook: {
-                  type: Type.OBJECT,
-                  properties: {
-                    hook: { type: Type.STRING },
-                    caption: { type: Type.STRING },
-                    hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    callToAction: { type: Type.STRING },
-                  },
+      systemInstruction: systemPrompt,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          captions: {
+            type: Type.OBJECT,
+            description: "Map of platform name to post content",
+            properties: {
+              facebook: {
+                type: Type.OBJECT,
+                properties: {
+                  hook: { type: Type.STRING },
+                  caption: { type: Type.STRING },
+                  hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  callToAction: { type: Type.STRING },
                 },
-                instagram: {
-                  type: Type.OBJECT,
-                  properties: {
-                    hook: { type: Type.STRING },
-                    caption: { type: Type.STRING },
-                    hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    callToAction: { type: Type.STRING },
-                  },
+              },
+              instagram: {
+                type: Type.OBJECT,
+                properties: {
+                  hook: { type: Type.STRING },
+                  caption: { type: Type.STRING },
+                  hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  callToAction: { type: Type.STRING },
                 },
-                tiktok: {
-                  type: Type.OBJECT,
-                  properties: {
-                    hook: { type: Type.STRING },
-                    caption: { type: Type.STRING },
-                    hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    callToAction: { type: Type.STRING },
-                  },
+              },
+              tiktok: {
+                type: Type.OBJECT,
+                properties: {
+                  hook: { type: Type.STRING },
+                  caption: { type: Type.STRING },
+                  hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  callToAction: { type: Type.STRING },
                 },
-                whatsapp: {
-                  type: Type.OBJECT,
-                  properties: {
-                    hook: { type: Type.STRING },
-                    caption: { type: Type.STRING },
-                    hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    callToAction: { type: Type.STRING },
-                  },
+              },
+              whatsapp: {
+                type: Type.OBJECT,
+                properties: {
+                  hook: { type: Type.STRING },
+                  caption: { type: Type.STRING },
+                  hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  callToAction: { type: Type.STRING },
                 },
-                youtube: {
-                  type: Type.OBJECT,
-                  properties: {
-                    hook: { type: Type.STRING },
-                    caption: { type: Type.STRING },
-                    hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    callToAction: { type: Type.STRING },
-                  },
+              },
+              youtube: {
+                type: Type.OBJECT,
+                properties: {
+                  hook: { type: Type.STRING },
+                  caption: { type: Type.STRING },
+                  hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  callToAction: { type: Type.STRING },
                 },
               },
             },
-            suggestedAngles: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: "3 strategic marketing tips for this campaign",
-            },
           },
-          required: ["captions"],
+          suggestedAngles: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "3 strategic marketing tips for this campaign",
+          },
         },
+        required: ["captions"],
       },
     });
 
-    const text = response.text;
+    const text = result?.text;
     if (text) {
       const parsed = JSON.parse(text);
       if (parsed.captions && typeof parsed.captions === "object") {
@@ -299,7 +370,7 @@ Return strictly valid JSON matching the schema.
       }
       return res.json({
         success: true,
-        source: "gemini-3.7-flash",
+        source: result?.modelUsed || "gemini-3.7-flash",
         ...parsed,
       });
     }
@@ -436,32 +507,29 @@ Instructions:
 Return strictly JSON matching the response schema.
 `;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+    const result = await callGeminiWithResilience({
       contents: `Customer ${customerName || "user"} sent: "${customerMessage}". Generate the best response.`,
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            reply: { type: Type.STRING, description: "The response message in Arabic" },
-            intent: {
-              type: Type.STRING,
-              enum: ["price", "size", "location", "delivery", "greeting", "complaint", "general"],
-            },
-            confidence: { type: Type.NUMBER },
-            actionSuggestion: { type: Type.STRING, description: "Action advice for store manager" },
+      systemInstruction: systemPrompt,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          reply: { type: Type.STRING, description: "The response message in Arabic" },
+          intent: {
+            type: Type.STRING,
+            enum: ["price", "size", "location", "delivery", "greeting", "complaint", "general"],
           },
-          required: ["reply", "intent"],
+          confidence: { type: Type.NUMBER },
+          actionSuggestion: { type: Type.STRING, description: "Action advice for store manager" },
         },
+        required: ["reply", "intent"],
       },
     });
 
-    const parsed = safeParseJson(response.text, generateLocalReply());
+    const parsed = safeParseJson(result?.text, generateLocalReply());
     return res.json({
       success: true,
-      source: "gemini-3.7-flash",
+      source: result?.modelUsed || "gemini-3.7-flash",
       ...parsed,
     });
   } catch (error: any) {
@@ -558,44 +626,41 @@ Each suggestion must include:
 Ensure output is valid JSON strictly following the schema.
 `;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+    const result = await callGeminiWithResilience({
       contents: `Customer: "${customerName || "عميل"}" wrote on ${platform || "Instagram"}: "${customerMessage}". Generate contextual reply options.`,
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            intent: { type: Type.STRING },
-            intentAr: { type: Type.STRING },
-            sentiment: { type: Type.STRING },
-            sentimentAr: { type: Type.STRING },
-            customerSummary: { type: Type.STRING },
-            suggestions: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  tone: { type: Type.STRING },
-                  badge: { type: Type.STRING },
-                  reply: { type: Type.STRING },
-                  keyPointsCovered: { type: Type.STRING },
-                },
-                required: ["id", "tone", "badge", "reply"],
+      systemInstruction: systemPrompt,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          intent: { type: Type.STRING },
+          intentAr: { type: Type.STRING },
+          sentiment: { type: Type.STRING },
+          sentimentAr: { type: Type.STRING },
+          customerSummary: { type: Type.STRING },
+          suggestions: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                tone: { type: Type.STRING },
+                badge: { type: Type.STRING },
+                reply: { type: Type.STRING },
+                keyPointsCovered: { type: Type.STRING },
               },
+              required: ["id", "tone", "badge", "reply"],
             },
           },
-          required: ["intent", "intentAr", "sentiment", "sentimentAr", "customerSummary", "suggestions"],
         },
+        required: ["intent", "intentAr", "sentiment", "sentimentAr", "customerSummary", "suggestions"],
       },
     });
 
-    const parsed = safeParseJson(response.text, fallbackSuggestions);
+    const parsed = safeParseJson(result?.text, fallbackSuggestions);
     return res.json({
       success: true,
-      source: "gemini-3.7-flash",
+      source: result?.modelUsed || "gemini-3.7-flash",
       ...parsed,
     });
   } catch (error: any) {
@@ -633,36 +698,33 @@ app.post("/api/ai/suggest-times", async (req: Request, res: Response) => {
       });
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+    const result = await callGeminiWithResilience({
       contents: `Recommend optimal posting times for ${brandCategory || "clothing stores"} targeting ${targetAudience || "shoppers in Saudi Arabia & Gulf"}.`,
-      config: {
-        systemInstruction: "You are a social media analytics master. Provide optimal Arabic schedule windows based on Arab world retail traffic patterns.",
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            recommendedSlots: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  day: { type: Type.STRING },
-                  time: { type: Type.STRING },
-                  reason: { type: Type.STRING },
-                  platform: { type: Type.STRING },
-                },
+      systemInstruction: "You are a social media analytics master. Provide optimal Arabic schedule windows based on Arab world retail traffic patterns.",
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          recommendedSlots: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                day: { type: Type.STRING },
+                time: { type: Type.STRING },
+                reason: { type: Type.STRING },
+                platform: { type: Type.STRING },
               },
             },
-            peakWindows: { type: Type.STRING },
           },
-          required: ["recommendedSlots", "peakWindows"],
+          peakWindows: { type: Type.STRING },
         },
+        required: ["recommendedSlots", "peakWindows"],
       },
     });
 
-    const parsed = safeParseJson(response.text, fallbackSchedule);
-    return res.json({ success: true, source: "gemini-3.7-flash", ...parsed });
+    const parsed = safeParseJson(result?.text, fallbackSchedule);
+    return res.json({ success: true, source: result?.modelUsed || "gemini-3.7-flash", ...parsed });
   } catch (error: any) {
     console.warn("Suggest-times falling back to resilient schedule:", error?.message);
     return res.json({
@@ -806,60 +868,57 @@ Store Details:
 - Goal: ${themeOrGoal || "انتشار فيروسي (Viral Reach) وزيادة المبيعات"}
 `;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+    const result = await callGeminiWithResilience({
       contents: `Generate ${count || 3} comprehensive, viral video scripts based on this request: "${rawUserStory || keywordOrProduct || themeOrGoal}" for store "${brandName}".`,
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            ideas: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING },
-                  contentType: { type: Type.STRING, enum: ["reel", "carousel", "single_image", "story", "whatsapp_broadcast"] },
-                  targetPlatforms: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  hook: { type: Type.STRING },
-                  script: { type: Type.STRING },
-                  scenes: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        id: { type: Type.STRING },
-                        timestamp: { type: Type.STRING },
-                        title: { type: Type.STRING },
-                        voiceoverOrText: { type: Type.STRING },
-                        visualDirection: { type: Type.STRING },
-                      },
-                      required: ["title", "voiceoverOrText", "visualDirection"],
+      systemInstruction: systemPrompt,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          ideas: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                contentType: { type: Type.STRING, enum: ["reel", "carousel", "single_image", "story", "whatsapp_broadcast"] },
+                targetPlatforms: { type: Type.ARRAY, items: { type: Type.STRING } },
+                hook: { type: Type.STRING },
+                script: { type: Type.STRING },
+                scenes: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING },
+                      timestamp: { type: Type.STRING },
+                      title: { type: Type.STRING },
+                      voiceoverOrText: { type: Type.STRING },
+                      visualDirection: { type: Type.STRING },
                     },
+                    required: ["title", "voiceoverOrText", "visualDirection"],
                   },
-                  filmingTips: { type: Type.STRING },
-                  recommendedAudioOrVibe: { type: Type.STRING },
-                  captionDraft: { type: Type.STRING },
-                  hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  callToAction: { type: Type.STRING },
-                  estimatedDurationSeconds: { type: Type.NUMBER },
-                  priority: { type: Type.STRING, enum: ["low", "medium", "high", "urgent"] },
                 },
-                required: ["title", "hook", "script", "captionDraft", "hashtags"],
+                filmingTips: { type: Type.STRING },
+                recommendedAudioOrVibe: { type: Type.STRING },
+                captionDraft: { type: Type.STRING },
+                hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
+                callToAction: { type: Type.STRING },
+                estimatedDurationSeconds: { type: Type.NUMBER },
+                priority: { type: Type.STRING, enum: ["low", "medium", "high", "urgent"] },
               },
+              required: ["title", "hook", "script", "captionDraft", "hashtags"],
             },
           },
-          required: ["ideas"],
         },
+        required: ["ideas"],
       },
     });
 
-    const parsed = safeParseJson(response.text, { ideas: generateLocalIdeas() });
+    const parsed = safeParseJson(result?.text, { ideas: generateLocalIdeas() });
     return res.json({
       success: true,
-      source: "gemini-3.7-flash",
+      source: result?.modelUsed || "gemini-3.7-flash",
       ...parsed,
     });
   } catch (error: any) {
@@ -951,56 +1010,53 @@ app.post("/api/ai/analyze-content", async (req: Request, res: Response) => {
 3. contentInsights: 3 رؤى نوعية عميقة (strength, opportunity, recommendation).
 4. aiActionPlan: 3 إلى 4 توصيات تنفيذية عملية للمتجر لزيادة المبيعات والمشاهدات.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+    const result = await callGeminiWithResilience({
       contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            summary: { type: Type.STRING },
-            bestTimes: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  dayAr: { type: Type.STRING },
-                  timeSlot: { type: Type.STRING },
-                  platform: { type: Type.STRING },
-                  contentType: { type: Type.STRING },
-                  reason: { type: Type.STRING },
-                  engagementScore: { type: Type.NUMBER },
-                },
-                required: ["dayAr", "timeSlot", "platform", "contentType", "reason", "engagementScore"],
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          summary: { type: Type.STRING },
+          bestTimes: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                dayAr: { type: Type.STRING },
+                timeSlot: { type: Type.STRING },
+                platform: { type: Type.STRING },
+                contentType: { type: Type.STRING },
+                reason: { type: Type.STRING },
+                engagementScore: { type: Type.NUMBER },
               },
-            },
-            contentInsights: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING },
-                  description: { type: Type.STRING },
-                  type: { type: Type.STRING, enum: ["strength", "opportunity", "recommendation"] },
-                },
-                required: ["title", "description", "type"],
-              },
-            },
-            aiActionPlan: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
+              required: ["dayAr", "timeSlot", "platform", "contentType", "reason", "engagementScore"],
             },
           },
-          required: ["summary", "bestTimes", "contentInsights", "aiActionPlan"],
+          contentInsights: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                description: { type: Type.STRING },
+                type: { type: Type.STRING, enum: ["strength", "opportunity", "recommendation"] },
+              },
+              required: ["title", "description", "type"],
+            },
+          },
+          aiActionPlan: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+          },
         },
+        required: ["summary", "bestTimes", "contentInsights", "aiActionPlan"],
       },
     });
 
-    const parsed = safeParseJson(response.text, fallbackResponse);
+    const parsed = safeParseJson(result?.text, fallbackResponse);
     return res.json({
       success: true,
-      source: "gemini-3.7-flash",
+      source: result?.modelUsed || "gemini-3.7-flash",
       ...parsed,
     });
   } catch (error: any) {
