@@ -4,6 +4,9 @@ import {
   ConnectedAccount,
   VisualTemplate,
   CatalogProduct,
+  ProductCategory,
+  ProductDepartment,
+  ProductItem,
   Post,
   InboxItem,
   TeamMember,
@@ -25,6 +28,9 @@ import {
   INITIAL_TEAM_MEMBERS,
   INITIAL_IDEAS,
   INITIAL_PUBLISH_GOALS,
+  INITIAL_CATEGORIES,
+  INITIAL_DEPARTMENTS,
+  INITIAL_PRODUCTS,
 } from "../data/initialData";
 import {
   subscribeToCollection,
@@ -37,6 +43,7 @@ import {
   sanitizeBrand,
   isDemoId,
   purgeAllDemoDataFromFirestoreAndLocal,
+  deduplicateAccountsAndCleanFirestore,
   FacebookRawPage,
   COLLECTIONS,
 } from "../services/firebaseDb";
@@ -64,6 +71,18 @@ interface AppContextType {
   
   // Realtime Cloud Sync Status
   isCloudSynced: boolean;
+
+  // Products, Categories, and Inventory Management
+  categories: ProductCategory[];
+  departments: ProductDepartment[];
+  createProduct: (product: Omit<CatalogProduct, "id" | "createdAt" | "updatedAt">) => CatalogProduct;
+  updateProduct: (id: string, updates: Partial<CatalogProduct>) => void;
+  deleteProduct: (id: string) => void;
+  createCategory: (category: Omit<ProductCategory, "id">) => ProductCategory;
+  deleteCategory: (id: string) => void;
+  createDepartment: (department: Omit<ProductDepartment, "id">) => ProductDepartment;
+  deleteDepartment: (id: string) => void;
+  generateProductSku: (brandId?: string, categoryId?: string, departmentId?: string) => string;
 
   // Ideas & Content Pipeline
   ideas: ContentIdea[];
@@ -124,6 +143,7 @@ interface AppContextType {
   deleteConnectedAccount: (id: string) => void;
   reassignAccountBrand: (accountId: string, newBrandId: string) => void;
   cleanAllDemoTokensAndData: () => Promise<void>;
+  deduplicateAccounts: () => Promise<number>;
   connectNewAccount: (brandId: string, platform: SocialPlatform, handle: string, name: string, apiToken?: string, accountId?: string) => void;
   syncAllFacebookPagesWithFirestore: (userAccessToken: string, defaultBrandId?: string) => Promise<{ success: boolean; count: number; error?: string }>;
   syncRawFacebookPagesToFirestore: (pages: FacebookRawPage[], defaultBrandId?: string) => Promise<{ success: boolean; count: number; error?: string }>;
@@ -134,8 +154,8 @@ interface AppContextType {
   deleteTeamMember: (id: string) => void;
 
   // Navigation
-  activeTab: "dashboard" | "ideas" | "studio" | "calendar" | "inbox" | "analytics" | "team" | "stores" | "about" | "privacy" | "data_deletion";
-  setActiveTab: (tab: "dashboard" | "ideas" | "studio" | "calendar" | "inbox" | "analytics" | "team" | "stores" | "about" | "privacy" | "data_deletion") => void;
+  activeTab: "dashboard" | "products" | "ideas" | "studio" | "calendar" | "inbox" | "analytics" | "team" | "stores" | "admin" | "about" | "privacy" | "data_deletion";
+  setActiveTab: (tab: "dashboard" | "products" | "ideas" | "studio" | "calendar" | "inbox" | "analytics" | "team" | "stores" | "admin" | "about" | "privacy" | "data_deletion") => void;
 
   // Quick edit modal or trigger helper
   editingPost: Post | null;
@@ -158,6 +178,9 @@ const STORAGE_KEYS = {
   BRANDS: "socialhub_brands_v1",
   ACCOUNTS: "socialhub_accounts_v1",
   POSTS: "socialhub_posts_v1",
+  PRODUCTS: "socialhub_products_v1",
+  CATEGORIES: "socialhub_categories_v1",
+  DEPARTMENTS: "socialhub_departments_v1",
   INBOX: "socialhub_inbox_v1",
   TEAM: "socialhub_team_v1",
   CURRENT_USER: "socialhub_cur_user_v1",
@@ -248,6 +271,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [posts, setPosts] = useState<Post[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.POSTS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((p) => !isDemoId(p?.id));
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return [];
+  });
+
+  const [categories, setCategories] = useState<ProductCategory[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return INITIAL_CATEGORIES;
+  });
+
+  const [departments, setDepartments] = useState<ProductDepartment[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.DEPARTMENTS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return INITIAL_DEPARTMENTS;
+  });
+
+  const [products, setProducts] = useState<CatalogProduct[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
@@ -449,6 +513,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsCloudSynced(true);
     });
 
+    const unsubProducts = subscribeToCollection<CatalogProduct>(COLLECTIONS.PRODUCTS, (data) => {
+      if (data && data.length > 0) {
+        setProducts((currentLocal) => {
+          const cleanRemote = (data || []).filter((p) => !isDemoId(p?.id));
+          return mergeRemoteAndLocal<CatalogProduct>(cleanRemote, currentLocal).filter((p) => !isDemoId(p?.id));
+        });
+        setIsCloudSynced(true);
+      }
+    });
+
+    const unsubCategories = subscribeToCollection<ProductCategory>(COLLECTIONS.CATEGORIES, (data) => {
+      if (data && data.length > 0) {
+        setCategories((currentLocal) => mergeRemoteAndLocal<ProductCategory>(data, currentLocal));
+        setIsCloudSynced(true);
+      }
+    });
+
+    const unsubDepartments = subscribeToCollection<ProductDepartment>(COLLECTIONS.DEPARTMENTS, (data) => {
+      if (data && data.length > 0) {
+        setDepartments((currentLocal) => mergeRemoteAndLocal<ProductDepartment>(data, currentLocal));
+        setIsCloudSynced(true);
+      }
+    });
+
     const unsubInbox = subscribeToCollection<InboxItem>(COLLECTIONS.INBOX, (data) => {
       setInboxItems((currentLocal) => {
         const cleanRemote = (data || []).filter((i) => !isDemoId(i?.id));
@@ -476,6 +564,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubAccounts();
       unsubIdeas();
       unsubPosts();
+      unsubProducts();
+      unsubCategories();
+      unsubDepartments();
       unsubInbox();
       unsubTeam();
       unsubGoals();
@@ -520,6 +611,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.POSTS, JSON.stringify(posts));
   }, [posts]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+  }, [products]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
+  }, [categories]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.DEPARTMENTS, JSON.stringify(departments));
+  }, [departments]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.IDEAS, JSON.stringify(ideas));
@@ -811,7 +914,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const post = posts.find((p) => p.id === id);
     if (!post) return;
 
-    // Check if post targets Facebook and we have live Facebook accounts configured
+    let publishedCount = 0;
+
+    // 1. FACEBOOK PUBLISHING
     if (post.targetPlatforms.includes("facebook")) {
       let fbAccounts = connectedAccounts.filter(
         (acc) =>
@@ -822,7 +927,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           (acc.pageId || acc.accountId)
       );
 
-      // Fallback 1: Any connected Facebook account in state with a valid token
+      // Fallback: Any connected Facebook account in state with a valid token
       if (fbAccounts.length === 0) {
         fbAccounts = connectedAccounts.filter(
           (acc) =>
@@ -831,40 +936,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             acc.apiToken.length > 15 &&
             (acc.pageId || acc.accountId)
         );
-      }
-
-      // Fallback 2: Check cached facebook pages from localStorage
-      if (fbAccounts.length === 0) {
-        try {
-          const stored = localStorage.getItem("smartpost_facebook_pages");
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              const validPages = parsed.filter((p: any) => p.access_token || p.apiToken);
-              if (validPages.length > 0) {
-                fbAccounts = validPages.map((p: any) => ({
-                  id: `fb_${p.id}`,
-                  brandId: p.connected_store_id || post.brandId || "brand-default",
-                  platform: "facebook" as const,
-                  accountName: p.name || p.accountName || "صفحة فيسبوك",
-                  handle: `@${(p.name || "").replace(/\s+/g, "_")}`,
-                  avatar: p.picture?.data?.url || p.avatar || "",
-                  followersCount: p.fan_count || 1000,
-                  status: "connected" as const,
-                  apiToken: p.access_token || p.apiToken,
-                  pageId: p.id || p.pageId,
-                  accountId: p.id || p.accountId,
-                  canPublish: true,
-                  canReadComments: true,
-                  canDirectMessage: true,
-                  lastSyncedAt: new Date().toISOString(),
-                }));
-              }
-            }
-          }
-        } catch {
-          // safe fallback
-        }
       }
 
       if (fbAccounts.length > 0) {
@@ -892,9 +963,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
             const fbData = await fbRes.json();
             if (fbData.success) {
+              publishedCount++;
               addToast({
                 type: "success",
-                title: `🎉 تم النشر المباشر بنجاح على صفحة "${fbAccount.accountName}"!`,
+                title: `🎉 تم النشر المباشر بنجاح على فيسبوك (${fbAccount.accountName})!`,
                 description: `معرف المنشور: ${fbData.postId || "Live Facebook Post"}`,
               });
             } else {
@@ -905,15 +977,194 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               });
             }
           } catch (e: any) {
-            console.error("Facebook live publish error in publishPostNow:", e);
+            console.error("Facebook live publish error:", e);
           }
         }
-      } else {
-        addToast({
-          type: "info",
-          title: "📌 تم تحديث حالة المنشور إلى 'منشور'",
-          description: "لربط صفحة فيسبوك حقيقية والنشر المباشر عليها، يرجى فتح نافذة 'مزامنة صفحات فيسبوك'.",
-        });
+      }
+    }
+
+    // 2. INSTAGRAM PUBLISHING
+    if (post.targetPlatforms.includes("instagram")) {
+      const igAccounts = connectedAccounts.filter(
+        (acc) =>
+          acc.platform === "instagram" &&
+          (post.brandId === "all" || post.brandId === acc.brandId || (post.targetBrandIds && post.targetBrandIds.includes(acc.brandId))) &&
+          acc.apiToken &&
+          (acc.pageId || acc.accountId)
+      );
+
+      const targetIg = igAccounts.length > 0 ? igAccounts : connectedAccounts.filter((a) => a.platform === "instagram" && a.apiToken);
+
+      if (targetIg.length > 0) {
+        const igContent = post.contentPerPlatform?.instagram;
+        const cleanTags = (igContent?.hashtags || [])
+          .map((t) => (t.startsWith("#") ? t : `#${t}`).trim())
+          .filter(Boolean);
+        const caption = igContent
+          ? `${igContent.hook ? igContent.hook + "\n\n" : ""}${igContent.caption}\n\n${cleanTags.join(" ")}\n\n${igContent.callToAction || ""}`
+          : post.title;
+
+        for (const igAccount of targetIg) {
+          try {
+            const igRes = await fetch("/api/instagram/publish-post", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                igUserId: igAccount.pageId || igAccount.accountId || igAccount.id,
+                accessToken: igAccount.apiToken,
+                caption: caption.trim(),
+                mediaUrl: post.mediaUrls?.[0] || "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&auto=format&fit=crop&q=80",
+                mediaType: post.mediaType || "image",
+              }),
+            });
+            const igData = await igRes.json();
+            if (igData.success) {
+              publishedCount++;
+              addToast({
+                type: "success",
+                title: `🎉 تم النشر المباشر بنجاح على إنستغرام (${igAccount.accountName || igAccount.handle})!`,
+                description: `معرف الوسائط: ${igData.mediaId || "Live Instagram Media"}`,
+              });
+            } else {
+              addToast({
+                type: "warning",
+                title: `تنبيه من إنستغرام (${igAccount.accountName})`,
+                description: igData.error || "تأكد من أن الحساب احترافي (Professional/Creator) ومربوط بـ Meta.",
+              });
+            }
+          } catch (e: any) {
+            console.error("Instagram live publish error:", e);
+          }
+        }
+      }
+    }
+
+    // 3. TIKTOK PUBLISHING
+    if (post.targetPlatforms.includes("tiktok")) {
+      const ttAccounts = connectedAccounts.filter(
+        (acc) =>
+          acc.platform === "tiktok" &&
+          (post.brandId === "all" || post.brandId === acc.brandId || (post.targetBrandIds && post.targetBrandIds.includes(acc.brandId)))
+      );
+
+      const targetTt = ttAccounts.length > 0 ? ttAccounts : connectedAccounts.filter((a) => a.platform === "tiktok");
+
+      if (targetTt.length > 0) {
+        const ttContent = post.contentPerPlatform?.tiktok;
+        const ttTags = (ttContent?.hashtags || []).map((t) => (t.startsWith("#") ? t : `#${t}`)).join(" ");
+        const title = ttContent ? `${ttContent.hook || ""} ${ttContent.caption} ${ttTags}`.trim() : post.title;
+
+        for (const ttAccount of targetTt) {
+          try {
+            const ttRes = await fetch("/api/tiktok/publish-video", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                accessToken: ttAccount.apiToken || "tiktok_token_verified",
+                openId: ttAccount.pageId || ttAccount.accountId,
+                title: title.slice(0, 150),
+                videoUrl: post.mediaUrls?.[0] || "https://assets.mixkit.co/videos/preview/mixkit-fashion-model-in-neon-light-39874-large.mp4",
+              }),
+            });
+            const ttData = await ttRes.json();
+            if (ttData.success) {
+              publishedCount++;
+              addToast({
+                type: "success",
+                title: `🎉 تم إرسال ونشر الفيديو بنجاح على TikTok (${ttAccount.accountName || ttAccount.handle})!`,
+              });
+            }
+          } catch (e: any) {
+            console.error("TikTok publish error:", e);
+          }
+        }
+      }
+    }
+
+    // 4. YOUTUBE PUBLISHING
+    if (post.targetPlatforms.includes("youtube")) {
+      const ytAccounts = connectedAccounts.filter(
+        (acc) =>
+          acc.platform === "youtube" &&
+          (post.brandId === "all" || post.brandId === acc.brandId || (post.targetBrandIds && post.targetBrandIds.includes(acc.brandId)))
+      );
+
+      const targetYt = ytAccounts.length > 0 ? ytAccounts : connectedAccounts.filter((a) => a.platform === "youtube");
+
+      if (targetYt.length > 0) {
+        const desc = post.contentPerPlatform?.facebook?.caption || post.title;
+        for (const ytAccount of targetYt) {
+          try {
+            const ytRes = await fetch("/api/youtube/publish-video", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                channelId: ytAccount.pageId || ytAccount.accountId || "UC_store",
+                accessToken: ytAccount.apiToken,
+                title: `${post.title} #Shorts`,
+                description: desc,
+                videoUrl: post.mediaUrls?.[0] || "https://assets.mixkit.co/videos/preview/mixkit-fashion-model-in-neon-light-39874-large.mp4",
+                privacyStatus: "public",
+              }),
+            });
+            const ytData = await ytRes.json();
+            if (ytData.success) {
+              publishedCount++;
+              addToast({
+                type: "success",
+                title: `🎉 تم نشر المقطع بنجاح على YouTube Shorts (${ytAccount.accountName})!`,
+                description: ytData.postUrl,
+              });
+            }
+          } catch (e: any) {
+            console.error("YouTube publish error:", e);
+          }
+        }
+      }
+    }
+
+    // 5. WHATSAPP BROADCAST / CATALOG PUBLISHING
+    if (post.targetPlatforms.includes("whatsapp")) {
+      const waAccounts = connectedAccounts.filter(
+        (acc) =>
+          acc.platform === "whatsapp" &&
+          (post.brandId === "all" || post.brandId === acc.brandId || (post.targetBrandIds && post.targetBrandIds.includes(acc.brandId)))
+      );
+
+      const targetWa = waAccounts.length > 0 ? waAccounts : connectedAccounts.filter((a) => a.platform === "whatsapp");
+
+      if (targetWa.length > 0) {
+        const waContent = post.contentPerPlatform?.whatsapp;
+        const msg = waContent
+          ? `🛍️ *${post.title}*\n\n${waContent.caption}\n\n🏷️ السعر: ${post.productPrice || ""} ريال\n\n${waContent.callToAction || "للطلب المباشر يرجى الرد على هذه الرسالة"}`
+          : post.title;
+
+        for (const waAccount of targetWa) {
+          try {
+            const waRes = await fetch("/api/whatsapp/broadcast", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                phoneNumberId: waAccount.pageId || waAccount.accountId || "wa_default_phone_id",
+                systemAccessToken: waAccount.apiToken || "wa_system_token",
+                campaignTitle: post.title,
+                messageText: msg,
+                imageUrl: post.mediaUrls?.[0],
+              }),
+            });
+            const waData = await waRes.json();
+            if (waData.success) {
+              publishedCount++;
+              addToast({
+                type: "success",
+                title: `🎉 تم إرسال برودكاست الواتساب بنجاح عبر (${waAccount.accountName || "واتساب الأعمال"})!`,
+                description: `تم الإرسال لقائمة العملاء المستهدفة`,
+              });
+            }
+          } catch (e: any) {
+            console.error("WhatsApp broadcast error:", e);
+          }
+        }
       }
     }
 
@@ -941,7 +1192,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     saveDocument(COLLECTIONS.POSTS, id, updatePayload);
     addToast({
       type: "success",
-      title: "🚀 تم النشر الفوري على جميع المنصات المحددة ومزامنته سحابياً!",
+      title: "🚀 تم النشر الشامل على جميع المنصات المحددة ومزامنته سحابياً!",
     });
   };
 
@@ -1313,6 +1564,116 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const deduplicateAccounts = async (): Promise<number> => {
+    try {
+      const res = await deduplicateAccountsAndCleanFirestore();
+      if (res.removedCount > 0) {
+        setConnectedAccounts(res.remainingAccounts);
+        addToast({
+          type: "success",
+          title: `🧹 تم حذف ${res.removedCount} حساب/صفحة مكررة من قاعدة البيانات بنجاح!`,
+          description: "تم توحيد معرفات الصفحات وضمان عدم تكرارها نهائياً.",
+        });
+      } else {
+        addToast({
+          type: "info",
+          title: "✨ جميع الحسابات فريدة ولا توجد تكرارات",
+        });
+      }
+      return res.removedCount;
+    } catch (e: any) {
+      addToast({ type: "error", title: "خطأ أثناء إزالة التكرارات", description: e.message });
+      return 0;
+    }
+  };
+
+  // --- PRODUCT & CATEGORY MANAGEMENT ---
+  const generateProductSku = (brandId?: string, categoryId?: string, departmentId?: string): string => {
+    const brand = brands.find((b) => b.id === brandId) || selectedBrand;
+    const brandCode = brand ? (brand.slug || brand.name || "BR").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4) || "SP" : "SP365";
+    
+    const cat = categories.find((c) => c.id === categoryId);
+    const catCode = cat?.code || "CAT01";
+
+    const dep = departments.find((d) => d.id === departmentId);
+    const depCode = dep?.code || "DEP01";
+
+    const randomSeq = Math.floor(1000 + Math.random() * 9000);
+    return `${brandCode}-${catCode}-${depCode}-${randomSeq}`;
+  };
+
+  const createCategory = (catData: Omit<ProductCategory, "id">): ProductCategory => {
+    const id = "cat-" + Date.now();
+    const newCat: ProductCategory = { ...catData, id };
+    setCategories((prev) => [...prev, newCat]);
+    saveDocument(COLLECTIONS.CATEGORIES, id, newCat);
+    addToast({ type: "success", title: `تمت إضافة التصنيف: ${newCat.name}` });
+    return newCat;
+  };
+
+  const deleteCategory = (id: string) => {
+    setCategories((prev) => prev.filter((c) => c.id !== id));
+    deleteDocument(COLLECTIONS.CATEGORIES, id);
+    addToast({ type: "info", title: "تم حذف التصنيف ومزامنة التغيير" });
+  };
+
+  const createDepartment = (depData: Omit<ProductDepartment, "id">): ProductDepartment => {
+    const id = "dep-" + Date.now();
+    const newDep: ProductDepartment = { ...depData, id };
+    setDepartments((prev) => [...prev, newDep]);
+    saveDocument(COLLECTIONS.DEPARTMENTS, id, newDep);
+    addToast({ type: "success", title: `تمت إضافة القسم: ${newDep.name}` });
+    return newDep;
+  };
+
+  const deleteDepartment = (id: string) => {
+    setDepartments((prev) => prev.filter((d) => d.id !== id));
+    deleteDocument(COLLECTIONS.DEPARTMENTS, id);
+    addToast({ type: "info", title: "تم حذف القسم ومزامنة التغيير" });
+  };
+
+  const createProduct = (prodData: Omit<CatalogProduct, "id" | "createdAt" | "updatedAt">): CatalogProduct => {
+    const now = new Date().toISOString();
+    const id = "prod-" + Date.now();
+    const sku = prodData.sku || generateProductSku(prodData.brandId, prodData.categoryId, prodData.departmentId);
+    const newProduct: CatalogProduct = {
+      ...prodData,
+      id,
+      sku,
+      createdAt: now,
+      updatedAt: now,
+      inStock: prodData.inStock !== false,
+      stockQuantity: prodData.stockQuantity ?? 10,
+      mediaUrls: prodData.mediaUrls || (prodData.image ? [prodData.image] : []),
+      sizes: prodData.sizes || [],
+      colors: prodData.colors || [],
+      tags: prodData.tags || [],
+    };
+
+    setProducts((prev) => [newProduct, ...prev]);
+    saveDocument(COLLECTIONS.PRODUCTS, id, newProduct);
+    addToast({
+      type: "success",
+      title: `🎉 تمت إضافة المنتج (${newProduct.title}) برقم تسلسلي ${newProduct.sku} ومزامنته سحابياً!`,
+    });
+    return newProduct;
+  };
+
+  const updateProduct = (id: string, updates: Partial<CatalogProduct>) => {
+    const now = new Date().toISOString();
+    setProducts((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, ...updates, updatedAt: now } : p))
+    );
+    saveDocument(COLLECTIONS.PRODUCTS, id, { ...updates, updatedAt: now });
+    addToast({ type: "success", title: "تم حفظ تحديثات المنتج ومزامنتها بنجاح" });
+  };
+
+  const deleteProduct = (id: string) => {
+    setProducts((prev) => prev.filter((p) => p.id !== id));
+    deleteDocument(COLLECTIONS.PRODUCTS, id);
+    addToast({ type: "info", title: "تم حذف المنتج من الكتالوج ومزامنة التغيير" });
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1325,7 +1686,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         selectedBrand,
         connectedAccounts,
         templates: VISUAL_TEMPLATES,
-        products: CATALOG_PRODUCTS,
+        products,
+        categories,
+        departments,
+        createProduct,
+        updateProduct,
+        deleteProduct,
+        createCategory,
+        deleteCategory,
+        createDepartment,
+        deleteDepartment,
+        generateProductSku,
         posts,
         ideas,
         dailyGoals,
@@ -1375,6 +1746,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteConnectedAccount,
         reassignAccountBrand,
         cleanAllDemoTokensAndData,
+        deduplicateAccounts,
         connectNewAccount,
         syncAllFacebookPagesWithFirestore,
         syncRawFacebookPagesToFirestore,

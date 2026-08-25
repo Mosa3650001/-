@@ -119,18 +119,54 @@ export interface VisualTemplate {
   iconName: string;
 }
 
-export interface CatalogProduct {
+export interface ProductCategory {
   id: string;
+  code: string; // e.g. "CAT01" or "CLOTH"
+  name: string; // e.g. "الملابس والأزياء"
+  nameAr: string;
+  description?: string;
+  icon?: string;
+}
+
+export interface ProductDepartment {
+  id: string;
+  code: string; // e.g. "DEP01" or "MEN"
+  categoryId: string;
+  name: string; // e.g. "قسم الرجال - قمصان وتيشيرتات"
+  nameAr: string;
+  description?: string;
+}
+
+export interface ProductItem {
+  id: string;
+  sku: string; // Hierarchical ID: BrandCode-CategoryCode-DepartmentCode-Sequence (e.g. SP365-CAT01-DEP02-0042)
+  brandId: string; // Associated brand
   title: string;
-  category: "shirts" | "dresses" | "pants" | "sportswear" | "suits" | "shoes";
-  categoryAr: string;
-  image: string;
-  suggestedPrice: number;
+  description: string;
+  categoryId: string;
+  categoryCode: string;
+  departmentId?: string;
+  departmentCode?: string;
+  price: number;
   originalPrice?: number;
   discountPercentage?: number;
+  stockQuantity: number;
+  inStock: boolean;
+  mediaUrls: string[]; // images and video URLs
+  videoUrl?: string;
   sizes: string[];
   colors: string[];
-  description: string;
+  tags: string[];
+  features?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CatalogProduct extends ProductItem {
+  category?: any;
+  categoryAr?: string;
+  image?: string;
+  suggestedPrice?: number;
 }
 
 export interface PlatformPostContent {

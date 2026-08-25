@@ -33,6 +33,7 @@ import {
 import { Brand, ConnectedAccount, SocialPlatform } from "../types";
 import { ApiIntegrationsModal } from "./ApiIntegrationsModal";
 import { FacebookPagesSyncModal } from "./FacebookPagesSyncModal";
+import { MultiPlatformSyncModal } from "./MultiPlatformSyncModal";
 
 export const StoreSettingsView: React.FC = () => {
   const {
@@ -63,6 +64,8 @@ export const StoreSettingsView: React.FC = () => {
   const [isConnectAccountModalOpen, setIsConnectAccountModalOpen] = useState(false);
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
   const [isFbSyncModalOpen, setIsFbSyncModalOpen] = useState(false);
+  const [isMultiSyncModalOpen, setIsMultiSyncModalOpen] = useState(false);
+  const [multiSyncInitialPlatform, setMultiSyncInitialPlatform] = useState<SocialPlatform>("facebook");
   const [isCleaning, setIsCleaning] = useState(false);
   const [selectedAccountForApi, setSelectedAccountForApi] = useState<ConnectedAccount | null>(null);
 
@@ -344,14 +347,17 @@ export const StoreSettingsView: React.FC = () => {
             <span>{isCleaning ? "جاري التنظيف..." : "🧹 تنظيف التوكنات والبيانات السابقة"}</span>
           </button>
 
-          {/* Guided Link Wizard Button */}
+          {/* Multi-Platform 5-in-1 Hub Button */}
           <button
             type="button"
-            onClick={() => setShowGuidedWizard((prev) => !prev)}
-            className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs shadow-md shadow-indigo-600/25 transition flex items-center gap-2"
+            onClick={() => {
+              setMultiSyncInitialPlatform("facebook");
+              setIsMultiSyncModalOpen(true);
+            }}
+            className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:opacity-95 text-white font-bold text-xs shadow-md shadow-indigo-600/25 transition flex items-center gap-2"
           >
-            <Zap className="w-4 h-4 text-amber-300" />
-            <span>⚡ دليل ربط صفحة بمتجر (4 خطوات)</span>
+            <Sparkles className="w-4 h-4 text-amber-300" />
+            <span>⚡ مركز ربط القنوات (5 منصات)</span>
           </button>
 
           {/* Quick Meta Sync Modal */}
@@ -1067,6 +1073,14 @@ export const StoreSettingsView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* MultiPlatform 5-in-1 Sync Modal */}
+      <MultiPlatformSyncModal
+        isOpen={isMultiSyncModalOpen}
+        onClose={() => setIsMultiSyncModalOpen(false)}
+        initialPlatform={multiSyncInitialPlatform}
+        targetBrandId={activeBrandTab}
+      />
 
       {/* Global API Integrations Modal */}
       <ApiIntegrationsModal

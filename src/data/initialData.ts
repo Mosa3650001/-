@@ -1,8 +1,39 @@
-import { Brand, ConnectedAccount, VisualTemplate, CatalogProduct, Post, InboxItem, TeamMember, ContentIdea, DailyPublishGoal } from "../types";
+import {
+  Brand,
+  ConnectedAccount,
+  VisualTemplate,
+  CatalogProduct,
+  ProductCategory,
+  ProductDepartment,
+  ProductItem,
+  Post,
+  InboxItem,
+  TeamMember,
+  ContentIdea,
+  DailyPublishGoal,
+} from "../types";
 
 export const INITIAL_BRANDS: Brand[] = [];
 
 export const INITIAL_CONNECTED_ACCOUNTS: ConnectedAccount[] = [];
+
+export const INITIAL_CATEGORIES: ProductCategory[] = [
+  { id: "cat-cloth", code: "CLOTH", name: "الملابس والأزياء", nameAr: "الملابس والأزياء", icon: "Shirt" },
+  { id: "cat-shoes", code: "SHOES", name: "الأحذية والحقائب", nameAr: "الأحذية والحقائب", icon: "Footprints" },
+  { id: "cat-acc", code: "ACC", name: "الإكسسوارات والساعات", nameAr: "الإكسسوارات والساعات", icon: "Watch" },
+  { id: "cat-beauty", code: "BEAUTY", name: "العناية والعطور", nameAr: "العناية والعطور", icon: "Sparkles" },
+  { id: "cat-services", code: "SERV", name: "الخدمات والتوصيل", nameAr: "الخدمات والتوصيل", icon: "Truck" },
+];
+
+export const INITIAL_DEPARTMENTS: ProductDepartment[] = [
+  { id: "dep-men-shirts", code: "MSHIRT", categoryId: "cat-cloth", name: "قمصان وتيشيرتات رجالي", nameAr: "قمصان وتيشيرتات رجالي" },
+  { id: "dep-men-pants", code: "MPANTS", categoryId: "cat-cloth", name: "بناطيل وأطقم رياضية رجالي", nameAr: "بناطيل وأطقم رياضية رجالي" },
+  { id: "dep-women-dresses", code: "WDRESS", categoryId: "cat-cloth", name: "فساتين وجلابيات نسائية", nameAr: "فساتين وجلابيات نسائية" },
+  { id: "dep-shoes-sneakers", code: "SNEAK", categoryId: "cat-shoes", name: "أحذية سنيكرز ورياضية", nameAr: "أحذية سنيكرز ورياضية" },
+  { id: "dep-perfumes", code: "PERF", categoryId: "cat-beauty", name: "عطور شرقية وبخاخات", nameAr: "عطور شرقية وبخاخات" },
+];
+
+export const INITIAL_PRODUCTS: ProductItem[] = [];
 
 export const VISUAL_TEMPLATES: VisualTemplate[] = [
   {
@@ -58,29 +89,51 @@ export const VISUAL_TEMPLATES: VisualTemplate[] = [
 export const CATALOG_PRODUCTS: CatalogProduct[] = [
   {
     id: "prod-1",
+    sku: "SP-CLOTH-MSHIRT-1001",
+    brandId: "brand-1",
     title: "قميص كتان طبيعي صيفي كلاسيك",
+    description: "قميص صيفي مصنوع من أجود خيوط الكتان الطبيعي، خفيف وبارد ومثالي للدوام والمناسبات النهارية.",
+    categoryId: "cat-cloth",
+    categoryCode: "CLOTH",
+    departmentId: "dep-mshirt",
+    departmentCode: "MSHIRT",
     category: "shirts",
     categoryAr: "قمصان رجالية",
     image: "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=600&auto=format&fit=crop&q=80",
+    mediaUrls: ["https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=600&auto=format&fit=crop&q=80"],
+    price: 145,
     suggestedPrice: 145,
     originalPrice: 220,
     discountPercentage: 35,
+    stockQuantity: 24,
+    inStock: true,
     sizes: ["M", "L", "XL", "2XL", "3XL"],
     colors: ["بيج رملي", "أبيض ناصع", "أزرق سماوي", "زيتي هادئ"],
-    description: "قميص صيفي مصنوع من أجود خيوط الكتان الطبيعي، خفيف وبارد ومثالي للدوام والمناسبات النهارية.",
+    tags: ["صيفي", "كتان", "رجالي", "عرض_خاص"],
   },
   {
     id: "prod-2",
+    sku: "SP-CLOTH-SPORT-1002",
+    brandId: "brand-1",
     title: "طقم رياضي شبابي مريح",
+    description: "طقم ستريت وير عصري مريح جداً بخامات قطنية معالجة ضد الانكماش.",
+    categoryId: "cat-cloth",
+    categoryCode: "CLOTH",
+    departmentId: "dep-sport",
+    departmentCode: "SPORT",
     category: "sportswear",
     categoryAr: "أطقم رياضية",
     image: "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=600&auto=format&fit=crop&q=80",
+    mediaUrls: ["https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=600&auto=format&fit=crop&q=80"],
+    price: 185,
     suggestedPrice: 185,
     originalPrice: 260,
     discountPercentage: 28,
+    stockQuantity: 15,
+    inStock: true,
     sizes: ["S", "M", "L", "XL"],
     colors: ["رمادي ثلجي", "أسود ملكي", "أخضر زيتوني"],
-    description: "طقم ستريت وير عصري مريح جداً بخامات قطنية معالجة ضد الانكماش.",
+    tags: ["رياضي", "ستريت_وير", "قطن", "تخفيضات"],
   },
 ];
 

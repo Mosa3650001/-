@@ -222,6 +222,7 @@ export const SmartInboxChatbot: React.FC<SmartInboxChatbotProps> = ({
               <option value="tiktok">TikTok (تيك توك)</option>
               <option value="whatsapp">WhatsApp (واتساب)</option>
               <option value="facebook">Facebook (فيسبوك)</option>
+              <option value="youtube">YouTube (يوتيوب)</option>
             </select>
           </div>
 

@@ -11,6 +11,8 @@ import { InboxView } from "./components/InboxView";
 import { AnalyticsView } from "./components/AnalyticsView";
 import { TeamManagementView } from "./components/TeamManagementView";
 import { StoreSettingsView } from "./components/StoreSettingsView";
+import { ProductsCatalogView } from "./components/ProductsCatalogView";
+import { AdminManagementView } from "./components/AdminManagementView";
 import { AboutUsView } from "./components/AboutUsView";
 import { PrivacyPolicyView } from "./components/PrivacyPolicyView";
 import { DataDeletionView } from "./components/DataDeletionView";
@@ -55,6 +57,8 @@ const MainLayout: React.FC = () => {
               {activeTab === "analytics" && <AnalyticsView />}
               {activeTab === "team" && <TeamManagementView />}
               {activeTab === "stores" && <StoreSettingsView />}
+              {activeTab === "products" && <ProductsCatalogView />}
+              {activeTab === "admin" && <AdminManagementView />}
               {activeTab === "about" && <AboutUsView onNavigateTab={setActiveTab} />}
               {activeTab === "privacy" && <PrivacyPolicyView />}
               {activeTab === "data_deletion" && <DataDeletionView />}

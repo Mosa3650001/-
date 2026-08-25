@@ -25,6 +25,8 @@ import {
   RefreshCw,
   ExternalLink,
   Check,
+  Package,
+  ShieldAlert,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { FacebookPagesSyncModal } from "./FacebookPagesSyncModal";
@@ -253,6 +255,55 @@ export const DashboardView: React.FC = () => {
             <CheckCircle className="w-3.5 h-3.5" />
             <span>كتابة، تصاميم، ورد على 100% من الزبائن</span>
           </div>
+        </div>
+      </div>
+
+      {/* Quick Access to Catalog & Admin Control Hub */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div
+          onClick={() => setActiveTab("products")}
+          className="p-5 rounded-3xl bg-gradient-to-r from-indigo-950/40 via-slate-900/60 to-indigo-900/30 border border-indigo-500/20 hover:border-indigo-500/50 cursor-pointer transition group shadow-sm flex items-center justify-between"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30 group-hover:scale-110 transition">
+              <Package className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="font-bold text-white text-base flex items-center gap-2">
+                <span>كتالوج المنتجات والمخزون بنظام SKU</span>
+                <span className="text-[10px] bg-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full font-bold">
+                  جديد
+                </span>
+              </h4>
+              <p className="text-xs text-slate-400 mt-0.5">
+                إدارة منتجات المتاجر، الأسعار، الخصومات، وتوليد منشورات إعلانية فورية.
+              </p>
+            </div>
+          </div>
+          <ChevronLeft className="w-5 h-5 text-indigo-400 group-hover:-translate-x-1 transition" />
+        </div>
+
+        <div
+          onClick={() => setActiveTab("admin")}
+          className="p-5 rounded-3xl bg-gradient-to-r from-amber-950/40 via-slate-900/60 to-amber-900/30 border border-amber-500/20 hover:border-amber-500/50 cursor-pointer transition group shadow-sm flex items-center justify-between"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30 group-hover:scale-110 transition">
+              <ShieldAlert className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="font-bold text-white text-base flex items-center gap-2">
+                <span>لوحة التحكم وتمديد التوكنات (60 يوم / دائم)</span>
+                <span className="text-[10px] bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded-full font-bold">
+                  Admin
+                </span>
+              </h4>
+              <p className="text-xs text-slate-400 mt-0.5">
+                تصفية الحسابات المكررة وتوليد توكنات فيسبوك لا تنتهي للمنشورات المجدولة.
+              </p>
+            </div>
+          </div>
+          <ChevronLeft className="w-5 h-5 text-amber-400 group-hover:-translate-x-1 transition" />
         </div>
       </div>
 

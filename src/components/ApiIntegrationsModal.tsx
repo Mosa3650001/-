@@ -333,19 +333,19 @@ export const ApiIntegrationsModal: React.FC<{
     setIsTesting(true);
     setTestResult(null);
 
-    if (!tokenInput || tokenInput.length < 10) {
+    if (!tokenInput || tokenInput.length < 5) {
       setIsTesting(false);
       setTestResult({
         tested: true,
         success: false,
-        message: "فشل التحقق: رمز الـ Page Access Token غير مكتمل أو فارغ.",
-        details: "يرجى إدخال رمز وصول الصفحة (Page Access Token) المستخرج من Meta for Developers.",
+        message: "فشل التحقق: رمز الـ Access Token / API Key غير مكتمل أو فارغ.",
+        details: "يرجى إدخال رمز الوصول أو مفتاح الـ API الخاص بالمنصة المحددة.",
       });
       return;
     }
 
-    if (activeAccount.platform === "facebook") {
-      try {
+    try {
+      if (activeAccount.platform === "facebook") {
         const res = await fetch("/api/facebook/test-connection", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -383,31 +383,164 @@ export const ApiIntegrationsModal: React.FC<{
             details: "تأكد من صحة الـ Page ID ومن أن الـ Token يملك صلاحيات (pages_manage_posts, pages_read_engagement).",
           });
         }
-      } catch (err: any) {
-        setTestResult({
-          tested: true,
-          success: false,
-          message: "تعذر الاتصال بسيرفر فيسبوك",
-          details: err.message || "تحقق من اتصال الإنترنت وصلاحية التوكن.",
+      } else if (activeAccount.platform === "instagram") {
+        const res = await fetch("/api/instagram/test-connection", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            igUserId: idInput || activeAccount.pageId || activeAccount.accountId,
+            accessToken: tokenInput,
+          }),
         });
-      } finally {
-        setIsTesting(false);
+        const data = await res.json();
+
+        if (data.success) {
+          setTestResult({
+            tested: true,
+            success: true,
+            message: `✅ اتصال مباشر وناجح بـ Instagram Graph API!`,
+            details: `الحساب: @${data.username} (${data.name}) - المتابعون: ${data.followersCount} - المنشورات: ${data.mediaCount}`,
+          });
+          updateConnectedAccount(activeAccount.id, {
+            status: "connected",
+            accountName: data.name || data.username,
+            handle: `@${data.username}`,
+            pageId: data.igUserId,
+            accountId: data.igUserId,
+            apiToken: tokenInput,
+          });
+          addToast({
+            type: "success",
+            title: `تم التحقق بنجاح من حساب إنستغرام @${data.username}!`,
+            description: "الحساب متصل وجاهز لنشر الصور والريلز ومزامنة التعليقات.",
+          });
+        } else {
+          setTestResult({
+            tested: true,
+            success: false,
+            message: data.error || "تعذر التحقق من حساب Instagram",
+            details: "تأكد من تحويل الحساب إلى Professional Account وربطه بصفحة فيسبوك في Meta Business Suite.",
+          });
+        }
+      } else if (activeAccount.platform === "tiktok") {
+        const res = await fetch("/api/tiktok/test-connection", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clientKey: secretInput,
+            openId: idInput,
+            accessToken: tokenInput,
+          }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          setTestResult({
+            tested: true,
+            success: true,
+            message: `✅ تم التحقق من TikTok Content Posting API بنجاح!`,
+            details: `الحساب: ${data.accountName} (${data.handle}) - جاهزية رفع مقاطع الفيديو ونشر الشورتس.`,
+          });
+          updateConnectedAccount(activeAccount.id, {
+            status: "connected",
+            accountName: data.accountName || activeAccount.accountName,
+            apiToken: tokenInput,
+            accountId: idInput,
+          });
+          addToast({
+            type: "success",
+            title: `تم التحقق من ربط TikTok بنجاح!`,
+          });
+        } else {
+          setTestResult({
+            tested: true,
+            success: false,
+            message: data.error || "فشل التحقق من مفاتيح TikTok",
+          });
+        }
+      } else if (activeAccount.platform === "youtube") {
+        const res = await fetch("/api/youtube/test-connection", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            channelId: idInput,
+            apiKey: tokenInput,
+            accessToken: tokenInput,
+          }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          setTestResult({
+            tested: true,
+            success: true,
+            message: `✅ تم التحقق من قناة يوتيوب عبر YouTube Data API v3!`,
+            details: `القناة: ${data.channelTitle} (${data.handle || data.channelId}) - جاهزية رفع ونشر الفيديوهات والشورتس.`,
+          });
+          updateConnectedAccount(activeAccount.id, {
+            status: "connected",
+            accountName: data.channelTitle || activeAccount.accountName,
+            apiToken: tokenInput,
+            accountId: idInput,
+          });
+          addToast({
+            type: "success",
+            title: `تم التحقق من ربط قناة YouTube بنجاح!`,
+          });
+        } else {
+          setTestResult({
+            tested: true,
+            success: false,
+            message: data.error || "فشل التحقق من قناة YouTube",
+          });
+        }
+      } else if (activeAccount.platform === "whatsapp") {
+        const res = await fetch("/api/whatsapp/test-connection", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phoneNumberId: idInput,
+            wabaId: secretInput,
+            systemAccessToken: tokenInput,
+          }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          setTestResult({
+            tested: true,
+            success: true,
+            message: `✅ تم التحقق من WhatsApp Cloud API بنجاح!`,
+            details: `الرقم: ${data.displayPhoneNumber} (${data.verifiedName}) - جودة الحساب: ${data.qualityRating} - جاهز للبرودكاست والرد الآلي.`,
+          });
+          updateConnectedAccount(activeAccount.id, {
+            status: "connected",
+            accountName: `${data.verifiedName} (${data.displayPhoneNumber})`,
+            apiToken: tokenInput,
+            accountId: idInput,
+          });
+          addToast({
+            type: "success",
+            title: `تم التحقق من ربط WhatsApp Cloud API بنجاح!`,
+          });
+        } else {
+          setTestResult({
+            tested: true,
+            success: false,
+            message: data.error || "فشل التحقق من رقم الواتساب السحابي",
+            details: "تأكد من صحة الـ Phone Number ID وتوليد System User Token بصلاحية whatsapp_business_messaging.",
+          });
+        }
       }
-    } else {
-      setTimeout(() => {
-        setIsTesting(false);
-        setTestResult({
-          tested: true,
-          success: true,
-          message: "اتصال ناجح بنسبة 100%! تم التحقق من أذونات المنصة.",
-          details: `الحساب: ${activeAccount.accountName} (${activeAccount.handle}) - زمن الاستجابة: 84ms`,
-        });
-        updateConnectedAccount(activeAccount.id, {
-          status: "connected",
-          apiToken: tokenInput,
-          accountId: idInput,
-        });
-      }, 800);
+    } catch (err: any) {
+      setTestResult({
+        tested: true,
+        success: false,
+        message: "تعذر إتمام الفحص عبر الـ API",
+        details: err.message || "تحقق من اتصال الشبكة وصحة الرموز المدخلة.",
+      });
+    } finally {
+      setIsTesting(false);
     }
   };
 

@@ -19,6 +19,8 @@ import {
   Activity,
   FileSpreadsheet,
   Repeat,
+  Package,
+  ShieldAlert,
 } from "lucide-react";
 import { AppLogo } from "./AppLogo";
 
@@ -96,6 +98,20 @@ export const Sidebar: React.FC = () => {
       icon: Store,
       badge: `${connectedAccounts.length}`,
       badgeColor: "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300",
+    },
+    {
+      id: "products" as const,
+      label: "كتالوج المنتجات والمخزون",
+      icon: Package,
+      badge: "SKU",
+      badgeColor: "bg-indigo-100 dark:bg-indigo-500/20 text-indigo-800 dark:text-indigo-300 font-bold",
+    },
+    {
+      id: "admin" as const,
+      label: "لوحة الإدارة والتحكم التقني",
+      icon: ShieldAlert,
+      badge: "60D",
+      badgeColor: "bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 font-bold",
     },
   ];
 

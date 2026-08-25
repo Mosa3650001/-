@@ -32,6 +32,9 @@ export const COLLECTIONS = {
   BRANDS: "brands",
   ACCOUNTS: "accounts",
   FACEBOOK_PAGES: "facebook_pages",
+  PRODUCTS: "products",
+  CATEGORIES: "categories",
+  DEPARTMENTS: "departments",
   IDEAS: "ideas",
   POSTS: "posts",
   INBOX: "inbox",
@@ -175,30 +178,108 @@ export function mergeRemoteAndLocal<T extends { id: string }>(remoteList: T[], l
   if (!remoteList && !localList) return [];
   const mergedMap = new Map<string, T>();
   
+  // Helper to extract canonical unique key (especially for ConnectedAccount)
+  const getItemKey = (item: any): string => {
+    if (!item) return "";
+    if (item.platform === "facebook" && (item.pageId || item.accountId)) {
+      return `fb_${item.pageId || item.accountId}`;
+    }
+    if (item.platform && item.handle) {
+      return `${item.platform}_${item.handle.toLowerCase().replace(/[@\s]/g, "")}`;
+    }
+    return item.id;
+  };
+
   // 1. Add all remote docs first (excluding demo data)
-  (remoteList || []).forEach((item) => {
+  (remoteList || []).forEach((item: any) => {
     if (item && item.id && !isDemoId(item.id)) {
+      const key = getItemKey(item);
       if ("tagline" in item || "defaultHashtags" in item || "connectedPlatforms" in item || "toneLabel" in item) {
         const clean = sanitizeBrand(item) as unknown as T | null;
-        if (clean && !isDemoId(clean.id)) mergedMap.set(item.id, clean);
+        if (clean && !isDemoId(clean.id)) mergedMap.set(key, clean);
       } else {
-        mergedMap.set(item.id, item);
+        mergedMap.set(key, item);
       }
     }
   });
 
   // 2. Add local items if they aren't in remote yet (excluding demo data)
-  (localList || []).forEach((item) => {
-    if (item && item.id && !isDemoId(item.id) && !mergedMap.has(item.id)) {
-      if ("tagline" in item || "defaultHashtags" in item || "connectedPlatforms" in item || "toneLabel" in item) {
-        const clean = sanitizeBrand(item) as unknown as T | null;
-        if (clean && !isDemoId(clean.id)) mergedMap.set(item.id, clean);
-      } else {
-        mergedMap.set(item.id, item);
+  (localList || []).forEach((item: any) => {
+    if (item && item.id && !isDemoId(item.id)) {
+      const key = getItemKey(item);
+      if (!mergedMap.has(key)) {
+        if ("tagline" in item || "defaultHashtags" in item || "connectedPlatforms" in item || "toneLabel" in item) {
+          const clean = sanitizeBrand(item) as unknown as T | null;
+          if (clean && !isDemoId(clean.id)) mergedMap.set(key, clean);
+        } else {
+          mergedMap.set(key, item);
+        }
       }
     }
   });
   return Array.from(mergedMap.values());
+}
+
+/**
+ * Deduplicates connected accounts by pageId and purges duplicate documents from Firestore
+ */
+export async function deduplicateAccountsAndCleanFirestore(): Promise<{
+  removedCount: number;
+  remainingAccounts: ConnectedAccount[];
+}> {
+  try {
+    const snap = await getDocs(collection(db, COLLECTIONS.ACCOUNTS));
+    const rawList = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ConnectedAccount[];
+    
+    const seenMap = new Map<string, ConnectedAccount>();
+    const toDeleteDocIds: string[] = [];
+
+    for (const acc of rawList) {
+      if (!acc || isDemoId(acc.id)) {
+        toDeleteDocIds.push(acc.id);
+        continue;
+      }
+
+      // Unique key per real page
+      const uniqueKey = acc.platform === "facebook" && (acc.pageId || acc.accountId)
+        ? `fb_${acc.pageId || acc.accountId}`
+        : `${acc.platform}_${acc.handle || acc.id}`;
+
+      if (seenMap.has(uniqueKey)) {
+        // Keep the one with the newest token or canonical fb_ ID
+        const existing = seenMap.get(uniqueKey)!;
+        if (acc.id.startsWith("fb_") && !existing.id.startsWith("fb_")) {
+          toDeleteDocIds.push(existing.id);
+          seenMap.set(uniqueKey, acc);
+        } else {
+          toDeleteDocIds.push(acc.id);
+        }
+      } else {
+        seenMap.set(uniqueKey, acc);
+      }
+    }
+
+    // Delete duplicates in parallel from Firestore
+    await Promise.all(
+      toDeleteDocIds.map((docId) => deleteDoc(doc(db, COLLECTIONS.ACCOUNTS, docId)).catch(() => {}))
+    );
+
+    const remaining = Array.from(seenMap.values());
+    
+    // Also clean localStorage
+    if (typeof window !== "undefined") {
+      localStorage.setItem("socialhub_accounts_v1", JSON.stringify(remaining));
+      localStorage.setItem("smartpost_facebook_pages", JSON.stringify(remaining));
+    }
+
+    return {
+      removedCount: toDeleteDocIds.length,
+      remainingAccounts: remaining,
+    };
+  } catch (error) {
+    console.error("Error during account deduplication:", error);
+    return { removedCount: 0, remainingAccounts: [] };
+  }
 }
 
 /**
